@@ -11,23 +11,29 @@ import { exportInventoryPDF, exportInvoicePDF } from '../lib/pdf';
 import { fmtUSD } from '../lib/format';
 
 export default function Dashboard() {
-  const { items, loading, dbConnected, addItem, addStock, removeStock, registerInvoice } = useData();
+  const { items, teams, loading, dbConnected, addItem, addStock, removeStock, registerInvoice } = useData();
   const { notify } = useToast();
 
+  const [scope, setScope] = useState(null); // null = Geral, otherwise team id
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [adjust, setAdjust] = useState(null); // { mode, item }
   const [removal, setRemoval] = useState(null); // { item, amountRemoved }
 
+  const scopedItems = useMemo(
+    () => items.filter((i) => (i.team_id || null) === scope),
+    [items, scope]
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((i) => i.name.toLowerCase().includes(q));
-  }, [items, search]);
+    if (!q) return scopedItems;
+    return scopedItems.filter((i) => i.name.toLowerCase().includes(q));
+  }, [scopedItems, search]);
 
   const totalValue = useMemo(
-    () => items.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0),
-    [items]
+    () => scopedItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0),
+    [scopedItems]
   );
 
   async function handleAdjustConfirm(amount) {
@@ -53,17 +59,17 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-[26px] font-bold tracking-tight" style={{ color: 'var(--text)' }}>Estoque</h1>
+          <h1 className="text-[26px] font-bold" style={{ color: 'var(--text)', letterSpacing: '-0.02em' }}>Estoque</h1>
           <p className="mt-1 text-[14px]" style={{ color: 'var(--text-secondary)' }}>
-            {items.length} itens · valor total {fmtUSD(totalValue)}
+            {scopedItems.length} itens · valor total {fmtUSD(totalValue)}
             {!dbConnected && ' · salvando neste navegador'}
           </p>
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => (items.length ? exportInventoryPDF(items) : notify('Adicione itens primeiro', 'info'))}
+            onClick={() => (scopedItems.length ? exportInventoryPDF(scopedItems) : notify('Adicione itens primeiro', 'info'))}
             className="btn-ghost flex items-center gap-2 px-4 py-2.5 text-[13px]"
           >
             <Download size={15} /> Exportar PDF
@@ -77,7 +83,14 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {items.length > 0 && (
+      <div className="mb-6 flex gap-1.5 overflow-x-auto pb-1">
+        <ScopeChip label="Geral" active={scope === null} onClick={() => setScope(null)} />
+        {teams.map((t) => (
+          <ScopeChip key={t.id} label={t.name} active={scope === t.id} onClick={() => setScope(t.id)} />
+        ))}
+      </div>
+
+      {scopedItems.length > 0 && (
         <div className="relative mb-6 max-w-sm">
           <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
           <input
@@ -103,9 +116,9 @@ export default function Dashboard() {
         >
           <PackageSearch size={32} strokeWidth={1.5} style={{ color: 'var(--text-tertiary)' }} />
           <p className="mt-4 text-[15px] font-medium" style={{ color: 'var(--text)' }}>
-            {items.length === 0 ? 'Nenhum item no estoque ainda' : 'Nenhum item encontrado'}
+            {scopedItems.length === 0 ? 'Nenhum item aqui ainda' : 'Nenhum item encontrado'}
           </p>
-          {items.length === 0 && (
+          {scopedItems.length === 0 && (
             <button onClick={() => setAddOpen(true)} className="btn-primary mt-4 px-5 py-2.5 text-[13px]">
               Adicionar primeiro item
             </button>
@@ -126,7 +139,11 @@ export default function Dashboard() {
         </div>
       )}
 
-      <AddItemModal open={addOpen} onClose={() => setAddOpen(false)} onSubmit={({ name, quantity, unitPrice }) => addItem(name, quantity, unitPrice)} />
+      <AddItemModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSubmit={({ name, quantity, unitPrice }) => addItem(name, quantity, unitPrice, scope)}
+      />
 
       <AdjustStockModal
         open={Boolean(adjust)}
@@ -143,5 +160,20 @@ export default function Dashboard() {
         onCreateInvoice={handleCreateInvoice}
       />
     </div>
+  );
+}
+
+function ScopeChip({ label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors"
+      style={{
+        background: active ? 'var(--text)' : 'var(--bg-secondary)',
+        color: active ? 'var(--bg)' : 'var(--text-secondary)',
+      }}
+    >
+      {label}
+    </button>
   );
 }

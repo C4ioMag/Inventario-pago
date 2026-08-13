@@ -4,6 +4,9 @@ import { genId } from './format';
 const LOCAL_ITEMS_KEY = 'estoque_items';
 const LOCAL_INVOICES_KEY = 'estoque_invoices';
 const LOCAL_INVOICE_SEQ_KEY = 'estoque_invoice_seq';
+const LOCAL_TEAMS_KEY = 'estoque_teams';
+const LOCAL_ASSETS_KEY = 'estoque_assets';
+const LOCAL_ASSET_HISTORY_KEY = 'estoque_asset_history';
 
 function readLocal(key) {
   try {
@@ -24,6 +27,62 @@ function nextLocalInvoiceNumber() {
   return next;
 }
 
+/** Generic CRUD for simple tables (teams, assets, asset_parts_history) shared between Supabase and localStorage. */
+function makeCrud(table, localKey, { orderAsc = true } = {}) {
+  async function list() {
+    if (supabaseReady) {
+      const { data, error } = await supabase.from(table).select('*').order('created_at', { ascending: orderAsc });
+      if (error) throw error;
+      return data;
+    }
+    const rows = readLocal(localKey);
+    rows.sort((a, b) => (orderAsc ? 1 : -1) * (new Date(a.created_at) - new Date(b.created_at)));
+    return rows;
+  }
+
+  async function create(fields) {
+    const row = { id: genId(), created_at: new Date().toISOString(), ...fields };
+    if (supabaseReady) {
+      const { data, error } = await supabase.from(table).insert(row).select().single();
+      if (error) throw error;
+      return data;
+    }
+    const rows = readLocal(localKey);
+    rows.push(row);
+    writeLocal(localKey, rows);
+    return row;
+  }
+
+  async function update(id, patch) {
+    if (supabaseReady) {
+      const { data, error } = await supabase.from(table).update(patch).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    }
+    const rows = readLocal(localKey);
+    const idx = rows.findIndex((r) => r.id === id);
+    if (idx === -1) throw new Error('Registro não encontrado');
+    rows[idx] = { ...rows[idx], ...patch };
+    writeLocal(localKey, rows);
+    return rows[idx];
+  }
+
+  async function remove(id) {
+    if (supabaseReady) {
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (error) throw error;
+      return;
+    }
+    writeLocal(localKey, readLocal(localKey).filter((r) => r.id !== id));
+  }
+
+  return { list, create, update, remove };
+}
+
+export const teamsStore = makeCrud('teams', LOCAL_TEAMS_KEY);
+export const assetsStore = makeCrud('assets', LOCAL_ASSETS_KEY);
+export const assetHistoryStore = makeCrud('asset_parts_history', LOCAL_ASSET_HISTORY_KEY, { orderAsc: false });
+
 export async function listItems() {
   if (supabaseReady) {
     const { data, error } = await supabase.from('items').select('*').order('created_at', { ascending: true });
@@ -33,9 +92,10 @@ export async function listItems() {
   return readLocal(LOCAL_ITEMS_KEY).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 }
 
-export async function createItem({ name, quantity, unitPrice }) {
+export async function createItem({ name, quantity, unitPrice, teamId = null }) {
   const row = {
     id: genId(),
+    team_id: teamId,
     name,
     quantity,
     unit_price: unitPrice,

@@ -1,8 +1,13 @@
 # Estoque
 
-App de controle de estoque com geração de invoices em PDF (Power Connect USA).
+Sistema de controle de estoque, equipes e frota (Power Connect USA).
 
-- Adicionar itens, acrescentar/retirar quantidade
+- **Equipamentos**: crie equipes, adicione veículos/máquinas a cada uma (nome, tipo, modelo,
+  ano, placa, VIN, supervisor, proprietário, Verizon/Bouncie/Samsung/E-ZPass, observações) e
+  edite para redirecionar um asset para outra equipe
+- **Histórico por veículo**: registre peças trocadas com data — opcionalmente descontando
+  direto do estoque da equipe
+- **Estoque**: por equipe (ou geral), adicionar itens, acrescentar/retirar quantidade
 - Ao retirar, opção de gerar invoice (máquina + VIN) em PDF para cobrança
 - Exportar o estoque completo em PDF
 - Histórico de invoices, com re-download

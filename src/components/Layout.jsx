@@ -9,7 +9,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
       <header className="sticky top-0 z-30 border-b" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--bg) 82%, transparent)', backdropFilter: 'blur(20px)' }}>
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3.5">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
           <div className="flex items-center gap-2.5">
             <div
               className="flex h-8 w-8 items-center justify-center rounded-[9px] text-[12px] font-bold"
@@ -22,6 +22,7 @@ export default function Layout() {
 
           <nav className="flex items-center gap-1 rounded-full p-1" style={{ background: 'var(--bg-secondary)' }}>
             <Tab to="/">Estoque</Tab>
+            <Tab to="/equipamentos">Equipamentos</Tab>
             <Tab to="/invoices">Invoices</Tab>
           </nav>
 
@@ -39,7 +40,7 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-5 py-8">
+      <main className="mx-auto max-w-6xl px-5 py-8">
         <Outlet />
       </main>
     </div>
