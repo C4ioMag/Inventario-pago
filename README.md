@@ -40,7 +40,7 @@ O deploy é automático a cada push na branch `main`, via GitHub Actions (`.gith
 
 Passo único necessário (uma vez só): em **Settings → Pages**, defina **Source** como **GitHub Actions**.
 
-O site fica disponível em `https://c4iomag.github.io/inventario-pago/`.
+O site fica disponível em `https://c4iomag.github.io/Inventario-pago/` (repare no "I" maiúsculo, igual ao nome do repositório).
 
 ## Login
 
