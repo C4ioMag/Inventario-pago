@@ -3,47 +3,43 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --bg: #F2F2F7;
+  --bg: #FAFAFA;
   --bg-elevated: #FFFFFF;
-  --bg-secondary: #E8EAF0;
-  --bg-hover: rgba(0, 0, 0, 0.035);
-  --text: #1D1D1F;
-  --text-secondary: #6E6E73;
-  --text-tertiary: #AEAEB2;
-  --border: rgba(0, 0, 0, 0.08);
-  --accent: #0071E3;
-  --accent-hover: #0062C9;
-  --accent-soft: rgba(0, 113, 227, 0.10);
-  --success: #34C759;
-  --success-soft: rgba(52, 199, 89, 0.12);
-  --danger: #FF3B30;
-  --danger-soft: rgba(255, 59, 48, 0.10);
-  --warning: #FF9F0A;
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.14), 0 4px 16px rgba(0, 0, 0, 0.08);
+  --bg-secondary: #F0F0F2;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --text: #0A0A0B;
+  --text-secondary: #6E6E76;
+  --text-tertiary: #A6A6AD;
+  --border: rgba(0, 0, 0, 0.10);
+  --border-strong: rgba(0, 0, 0, 0.18);
+  --accent: #0066FF;
+  --accent-soft: rgba(0, 102, 255, 0.08);
+  --success: #1A8A3E;
+  --danger: #D5311F;
+  --btn-bg: #0A0A0B;
+  --btn-fg: #FFFFFF;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-modal: 0 24px 48px -12px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
 .dark {
   --bg: #000000;
-  --bg-elevated: #1C1C1E;
-  --bg-secondary: #17171A;
-  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-elevated: #121214;
+  --bg-secondary: #1C1C1F;
+  --bg-hover: rgba(255, 255, 255, 0.055);
   --text: #F5F5F7;
-  --text-secondary: #98989D;
-  --text-tertiary: #636366;
-  --border: rgba(255, 255, 255, 0.09);
-  --accent: #0A84FF;
-  --accent-hover: #409CFF;
-  --accent-soft: rgba(10, 132, 255, 0.16);
-  --success: #30D158;
-  --success-soft: rgba(48, 209, 88, 0.16);
-  --danger: #FF453A;
-  --danger-soft: rgba(255, 69, 58, 0.16);
-  --warning: #FF9F0A;
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.30);
-  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.30);
-  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55), 0 4px 16px rgba(0, 0, 0, 0.35);
+  --text-secondary: #9A9AA2;
+  --text-tertiary: #5C5C62;
+  --border: rgba(255, 255, 255, 0.11);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --accent: #3D8BFF;
+  --accent-soft: rgba(61, 139, 255, 0.14);
+  --success: #3DDC6F;
+  --danger: #FF5C48;
+  --btn-bg: #F5F5F7;
+  --btn-fg: #0A0A0B;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 24px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 * {
@@ -59,7 +55,7 @@ body {
   color: var(--text);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
-  transition: background-color 0.35s ease, color 0.35s ease;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -74,75 +70,68 @@ body {
   .surface {
     background: var(--bg-elevated);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-sm);
   }
 
   .input-apple {
     width: 100%;
     background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding-block: 11px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding-block: 12px;
     padding-inline: 14px;
     font-size: 15px;
     color: var(--text);
     outline: none;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
   }
   .input-apple::placeholder { color: var(--text-tertiary); }
   .input-apple:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 4px var(--accent-soft);
+    border-color: var(--text);
     background: var(--bg-elevated);
   }
+  .dark .input-apple:focus { border-color: var(--border-strong); }
 
   .btn-primary {
-    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-hover) 100%);
-    color: white;
+    background: var(--btn-bg);
+    color: var(--btn-fg);
     font-weight: 600;
-    border-radius: 12px;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-    box-shadow: 0 2px 10px var(--accent-soft);
+    border-radius: 10px;
+    transition: opacity 0.15s ease, transform 0.1s ease;
   }
-  .btn-primary:active:not(:disabled) { transform: scale(0.97); }
-  .btn-primary:disabled { opacity: 0.5; }
+  .btn-primary:hover:not(:disabled) { opacity: 0.85; }
+  .btn-primary:active:not(:disabled) { transform: scale(0.98); opacity: 0.75; }
+  .btn-primary:disabled { opacity: 0.35; }
 
   .btn-ghost {
-    background: var(--bg-hover);
+    background: transparent;
+    border: 1px solid var(--border-strong);
     color: var(--text);
     font-weight: 600;
-    border-radius: 12px;
-    transition: background-color 0.15s ease, transform 0.15s ease;
+    border-radius: 10px;
+    transition: background-color 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
   }
-  .btn-ghost:active { transform: scale(0.97); }
+  .btn-ghost:hover:not(:disabled) { background: var(--bg-hover); }
+  .btn-ghost:active { transform: scale(0.98); }
+  .btn-ghost:disabled { opacity: 0.4; }
 
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    border-radius: 999px;
-    font-size: 12px;
+  .label-caps {
+    font-size: 11px;
     font-weight: 600;
-    padding-block: 4px;
-    padding-inline: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
   }
-}
 
-/* ---------- Background aurora blobs (login) ---------- */
+  .row-divide > * + * {
+    border-top: 1px solid var(--border);
+  }
 
-@keyframes drift {
-  0%   { transform: translate(0, 0) scale(1); }
-  33%  { transform: translate(4%, -6%) scale(1.08); }
-  66%  { transform: translate(-3%, 4%) scale(0.96); }
-  100% { transform: translate(0, 0) scale(1); }
-}
-
-.aurora-blob {
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(10px);
-  animation: drift 22s ease-in-out infinite;
-  will-change: transform;
+  .row-hover {
+    transition: background-color 0.15s ease;
+  }
+  .row-hover:hover {
+    background: var(--bg-hover);
+  }
 }
 
 @keyframes shimmer {
@@ -161,3 +150,9 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 .float-in { animation: float-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes slow-drift {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-2%, 3%); }
+}
+.slow-drift { animation: slow-drift 30s ease-in-out infinite; }

@@ -9,38 +9,35 @@ export default function ItemCard({ item, onAdd, onRemove }) {
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.94 }}
-      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      className="surface flex flex-col justify-between rounded-[20px] p-5"
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="surface flex flex-col justify-between rounded-[16px] p-5"
     >
       <div>
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="text-[16px] font-semibold leading-snug" style={{ color: 'var(--text)' }}>{item.name}</h3>
+        <h3 className="text-[15px] font-semibold leading-snug" style={{ color: 'var(--text)' }}>{item.name}</h3>
+
+        <div className="mt-3.5 flex items-baseline gap-1.5">
           <span
-            className="chip shrink-0"
-            style={{
-              background: low ? 'var(--danger-soft)' : 'var(--success-soft)',
-              color: low ? 'var(--danger)' : 'var(--success)',
-            }}
+            className="text-[34px] font-bold leading-none tabular-nums"
+            style={{ color: low ? 'var(--danger)' : 'var(--text)', letterSpacing: '-0.02em' }}
           >
-            {item.quantity} un.
+            {item.quantity}
           </span>
+          <span className="label-caps">un. em estoque</span>
         </div>
-        <p className="mt-2 text-[13px]" style={{ color: 'var(--text-secondary)' }}>
-          {fmtUSD(item.unit_price)} / unidade
-        </p>
-        <p className="mt-0.5 text-[13px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-          Valor em estoque: {fmtUSD(total)}
+
+        <p className="mt-3 text-[13px]" style={{ color: 'var(--text-secondary)' }}>
+          {fmtUSD(item.unit_price)} / unidade · {fmtUSD(total)} total
         </p>
       </div>
 
-      <div className="mt-5 flex gap-2">
+      <div className="mt-5 flex gap-2 border-t pt-4" style={{ borderColor: 'var(--border)' }}>
         <button
           onClick={() => onRemove(item)}
           disabled={item.quantity <= 0}
-          className="btn-ghost flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[13px] disabled:opacity-40"
+          className="btn-ghost flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[13px] disabled:opacity-30"
         >
           <Minus size={15} /> Retirar
         </button>

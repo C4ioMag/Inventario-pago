@@ -43,8 +43,8 @@ export function ToastProvider({ children }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                className="surface pointer-events-auto flex items-center gap-2.5 rounded-2xl px-4 py-3 max-w-sm"
-                style={{ boxShadow: 'var(--shadow-lg)' }}
+                className="surface pointer-events-auto flex items-center gap-2.5 rounded-[14px] px-4 py-3 max-w-sm"
+                style={{ boxShadow: 'var(--shadow-modal)' }}
               >
                 <Icon size={18} style={{ color: ACCENTS[t.type] }} className="shrink-0" />
                 <span className="text-[14px] font-medium" style={{ color: 'var(--text)' }}>{t.message}</span>

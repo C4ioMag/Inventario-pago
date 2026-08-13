@@ -92,16 +92,16 @@ export default function Dashboard() {
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="skeleton h-[168px] rounded-[20px]" />
+            <div key={i} className="skeleton h-[168px] rounded-[16px]" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="surface flex flex-col items-center justify-center rounded-[24px] py-20 text-center"
+          className="surface flex flex-col items-center justify-center rounded-[16px] py-20 text-center"
         >
-          <PackageSearch size={40} style={{ color: 'var(--text-tertiary)' }} />
+          <PackageSearch size={32} strokeWidth={1.5} style={{ color: 'var(--text-tertiary)' }} />
           <p className="mt-4 text-[15px] font-medium" style={{ color: 'var(--text)' }}>
             {items.length === 0 ? 'Nenhum item no estoque ainda' : 'Nenhum item encontrado'}
           </p>

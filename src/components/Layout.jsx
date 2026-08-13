@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { LogOut, Package } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 import { useAuth } from '../context/AuthContext';
 
@@ -12,12 +12,12 @@ export default function Layout() {
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3.5">
           <div className="flex items-center gap-2.5">
             <div
-              className="flex h-9 w-9 items-center justify-center rounded-[11px]"
-              style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #0040DD 100%)' }}
+              className="flex h-8 w-8 items-center justify-center rounded-[9px] text-[12px] font-bold"
+              style={{ background: 'var(--text)', color: 'var(--bg)' }}
             >
-              <Package size={18} color="white" strokeWidth={2.3} />
+              PC
             </div>
-            <span className="text-[16px] font-bold tracking-tight" style={{ color: 'var(--text)' }}>Estoque</span>
+            <span className="text-[16px] font-bold" style={{ color: 'var(--text)', letterSpacing: '-0.02em' }}>Estoque</span>
           </div>
 
           <nav className="flex items-center gap-1 rounded-full p-1" style={{ background: 'var(--bg-secondary)' }}>
@@ -57,7 +57,7 @@ function Tab({ to, children }) {
       style={({ isActive }) => ({
         background: isActive ? 'var(--bg-elevated)' : 'transparent',
         color: isActive ? 'var(--text)' : 'var(--text-secondary)',
-        boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
+        boxShadow: isActive ? 'var(--shadow-xs)' : 'none',
       })}
     >
       {children}
