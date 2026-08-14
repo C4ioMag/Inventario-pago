@@ -1,55 +1,79 @@
 import { useEffect, useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import Modal from './Modal';
-
-const TIPOS = [
-  'Truck', 'Trailer', 'Excavator', 'Vermeer', 'Ditch Witch',
-  'Locator', 'Utility Locator', 'Vacuum', 'Compressor', 'Forklift', 'GPRS', 'Outro',
-];
+import { MAINTENANCE_TYPES, oilStatus, fmtNum } from '../lib/maintenance';
+import { fmtDate } from '../lib/format';
 
 const BLANK = {
-  tipo: 'Truck', name: '', model: '', year: '', plate: '', vin: '',
+  tipo: '', name: '', model: '', year: '', plate: '', vin: '',
   team_id: '', supervisor: '', owner: '', notes: '', status: 'disponivel',
-  category_id: '', brand_id: '', location_id: '',
+  odometer: '', oil_interval: '', last_oil_odometer: '', last_oil_date: '',
   verizon: '', bouncie: '', samsung: '', e_pass: '',
 };
 
-export default function AssetFormModal({ open, onClose, onSubmit, asset, teams, registries, defaultTeamId }) {
+const BLANK_ENTRY = { type: 'oleo', partName: '', date: '', odometer: '', notes: '' };
+
+export default function AssetFormModal({ open, onClose, onSubmit, asset, teams, categories = [], defaultTeamId }) {
   const [form, setForm] = useState(BLANK);
+  const [entries, setEntries] = useState([]);
+  const [entry, setEntry] = useState(BLANK_ENTRY);
   const [saving, setSaving] = useState(false);
   const isEdit = Boolean(asset);
-  const reg = registries || { categories: [], brands: [], locations: [] };
 
   useEffect(() => {
     if (!open) return;
+    setEntries([]);
+    setEntry(BLANK_ENTRY);
     if (asset) {
       setForm({
         ...BLANK,
-        ...asset,
+        ...Object.fromEntries(Object.entries(asset).map(([k, v]) => [k, v ?? ''])),
         team_id: asset.team_id || '',
-        category_id: asset.category_id || '',
-        brand_id: asset.brand_id || '',
-        location_id: asset.location_id || '',
         status: asset.status || 'disponivel',
       });
     } else {
-      setForm({ ...BLANK, team_id: defaultTeamId || '' });
+      setForm({ ...BLANK, team_id: defaultTeamId || '', tipo: categories[0]?.name || '' });
     }
-  }, [open, asset, defaultTeamId]);
+  }, [open, asset, defaultTeamId, categories]);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const preview = oilStatus({
+    oil_interval: form.oil_interval,
+    last_oil_odometer: form.last_oil_odometer,
+    odometer: form.odometer,
+  });
+
+  function addEntry() {
+    if (!entry.date) return;
+    setEntries((prev) => [...prev, entry]);
+    setEntry(BLANK_ENTRY);
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
     try {
-      await onSubmit({
-        ...form,
-        name: form.name.trim(),
-        team_id: form.team_id || null,
-        category_id: form.category_id || null,
-        brand_id: form.brand_id || null,
-        location_id: form.location_id || null,
-      });
+      const numeric = (v) => (v === '' || v === null ? null : Number(v));
+      await onSubmit(
+        {
+          ...form,
+          name: form.name.trim(),
+          team_id: form.team_id || null,
+          odometer: numeric(form.odometer),
+          oil_interval: numeric(form.oil_interval),
+          last_oil_odometer: numeric(form.last_oil_odometer),
+          last_oil_date: form.last_oil_date || null,
+        },
+        entries.map((en) => ({
+          type: en.type,
+          partName: en.partName.trim() || MAINTENANCE_TYPES[en.type].label,
+          quantity: 1,
+          date: en.date,
+          odometer: en.odometer === '' ? null : Number(en.odometer),
+          notes: en.notes.trim() || null,
+        }))
+      );
       onClose();
     } finally {
       setSaving(false);
@@ -62,18 +86,31 @@ export default function AssetFormModal({ open, onClose, onSubmit, asset, teams, 
       onClose={onClose}
       title={isEdit ? 'Editar equipamento' : 'Novo equipamento'}
       subtitle={isEdit ? asset?.name : 'Cadastre um veículo, trailer ou máquina'}
-      maxWidth={600}
+      maxWidth={620}
     >
-      <form onSubmit={handleSubmit} className="max-h-[68vh] space-y-5 overflow-y-auto pr-1">
+      <form onSubmit={handleSubmit} className="max-h-[70vh] space-y-5 overflow-y-auto pr-1">
         <Section title="Identificação">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Nome / Código" span>
               <input required value={form.name} onChange={set('name')} placeholder="Ex: TRK-034" className="input-apple" />
             </Field>
-            <Field label="Tipo">
-              <select value={form.tipo} onChange={set('tipo')} className="input-apple">
-                {TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
+            <Field label="Categoria">
+              {categories.length === 0 ? (
+                <input
+                  value={form.tipo}
+                  onChange={set('tipo')}
+                  placeholder="Ex: Truck (cadastre em Categorias)"
+                  className="input-apple"
+                />
+              ) : (
+                <select value={form.tipo} onChange={set('tipo')} className="input-apple">
+                  <option value="">— Sem categoria —</option>
+                  {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  {form.tipo && !categories.some((c) => c.name === form.tipo) && (
+                    <option value={form.tipo}>{form.tipo}</option>
+                  )}
+                </select>
+              )}
             </Field>
             <Field label="Modelo">
               <input value={form.model} onChange={set('model')} placeholder="Ex: F-550" className="input-apple" />
@@ -99,7 +136,7 @@ export default function AssetFormModal({ open, onClose, onSubmit, asset, teams, 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Equipe">
               <select value={form.team_id} onChange={set('team_id')} className="input-apple">
-                <option value="">Sem equipe</option>
+                <option value="">Yard (sem equipe)</option>
                 {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </Field>
@@ -116,26 +153,92 @@ export default function AssetFormModal({ open, onClose, onSubmit, asset, teams, 
             <Field label="Proprietário">
               <input value={form.owner} onChange={set('owner')} placeholder="Ex: Power Connect USA" className="input-apple" />
             </Field>
-            <Field label="Categoria">
-              <select value={form.category_id} onChange={set('category_id')} className="input-apple">
-                <option value="">— Nenhuma —</option>
-                {reg.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Marca">
-              <select value={form.brand_id} onChange={set('brand_id')} className="input-apple">
-                <option value="">— Nenhuma —</option>
-                {reg.brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Local" span>
-              <select value={form.location_id} onChange={set('location_id')} className="input-apple">
-                <option value="">— Nenhum —</option>
-                {reg.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-            </Field>
           </div>
         </Section>
+
+        <Section title="Troca de óleo">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Odômetro atual">
+              <input type="number" min="0" value={form.odometer} onChange={set('odometer')} placeholder="Ex: 84200" className="input-apple" />
+            </Field>
+            <Field label="Trocar a cada">
+              <input type="number" min="0" value={form.oil_interval} onChange={set('oil_interval')} placeholder="Ex: 5000" className="input-apple" />
+            </Field>
+            <Field label="Odômetro da última troca">
+              <input type="number" min="0" value={form.last_oil_odometer} onChange={set('last_oil_odometer')} placeholder="Ex: 81000" className="input-apple" />
+            </Field>
+            <Field label="Data da última troca">
+              <input type="date" value={form.last_oil_date} onChange={set('last_oil_date')} className="input-apple" />
+            </Field>
+          </div>
+          <div
+            className="mt-3 rounded-lg px-3.5 py-2.5 text-[12.5px]"
+            style={{
+              background: preview.configured ? 'var(--accent-soft)' : 'var(--bg-secondary)',
+              color: preview.configured ? 'var(--accent)' : 'var(--text-secondary)',
+            }}
+          >
+            {preview.configured
+              ? <>Próxima troca aos <strong>{fmtNum(preview.next)}</strong>{preview.remaining != null && ` · ${preview.label}`}</>
+              : 'Preencha intervalo e odômetro da última troca para o sistema avisar a próxima.'}
+          </div>
+        </Section>
+
+        {!isEdit && (
+          <Section title="Manutenções que este equipamento já teve">
+            {entries.length > 0 && (
+              <div className="card mb-3 row-divide overflow-hidden">
+                {entries.map((en, idx) => (
+                  <div key={idx} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-medium" style={{ color: 'var(--text)' }}>
+                        {MAINTENANCE_TYPES[en.type].label}
+                        {en.partName ? ` · ${en.partName}` : ''}
+                      </p>
+                      <p className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                        {fmtDate(en.date)}{en.odometer ? ` · ${fmtNum(en.odometer)}` : ''}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEntries((prev) => prev.filter((_, i) => i !== idx))}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border"
+                      style={{ borderColor: 'var(--border)', color: 'var(--danger)' }}
+                      aria-label="Remover"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Tipo">
+                <select value={entry.type} onChange={(e) => setEntry((s) => ({ ...s, type: e.target.value }))} className="input-apple">
+                  {Object.entries(MAINTENANCE_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Data">
+                <input type="date" value={entry.date} onChange={(e) => setEntry((s) => ({ ...s, date: e.target.value }))} className="input-apple" />
+              </Field>
+              <Field label="Descrição">
+                <input value={entry.partName} onChange={(e) => setEntry((s) => ({ ...s, partName: e.target.value }))} placeholder="Ex: Óleo 15W40" className="input-apple" />
+              </Field>
+              <Field label="Odômetro">
+                <input type="number" min="0" value={entry.odometer} onChange={(e) => setEntry((s) => ({ ...s, odometer: e.target.value }))} placeholder="Ex: 81000" className="input-apple" />
+              </Field>
+            </div>
+            <button
+              type="button"
+              onClick={addEntry}
+              disabled={!entry.date}
+              className="btn-ghost mt-3 flex w-full items-center justify-center gap-2 py-2 text-[13px] disabled:opacity-40"
+            >
+              <Plus size={14} /> Adicionar ao histórico
+            </button>
+          </Section>
+        )}
 
         <Section title="Rastreamento & dispositivos">
           <div className="grid grid-cols-2 gap-3">

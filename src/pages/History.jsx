@@ -68,7 +68,7 @@ export default function History() {
         </select>
         <select value={teamFilter} onChange={(e) => { setTeamFilter(e.target.value); setVisible(PAGE); }} className="input-apple w-auto min-w-[140px]">
           <option value="all">Todas as equipes</option>
-          <option value="none">Geral</option>
+          <option value="none">Yard</option>
           {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </div>
@@ -113,7 +113,7 @@ export default function History() {
                         <td className="text-right tabular-nums" style={{ color: 'var(--text)' }}>
                           {m.quantity ?? '—'}
                         </td>
-                        <td>{m.team_name || 'Geral'}</td>
+                        <td>{m.team_name || 'Yard'}</td>
                         <td>{m.user_name || '—'}</td>
                       </tr>
                     );

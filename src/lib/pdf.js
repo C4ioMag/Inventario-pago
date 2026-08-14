@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { fmtUSD, fmtDate, fmtDateTime } from './format';
+import { fmtNum, oilStatus } from './maintenance';
 
 const BRAND = 'Power Connect USA';
 const INK = [10, 20, 40];
@@ -88,7 +89,7 @@ export function exportMovementsPDF(movements) {
   doc.save(`historico_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
-export function exportEquipmentPDF(assets, { teamName = () => '—', locationName = () => '—' } = {}) {
+export function exportEquipmentPDF(assets, { teamName = () => '—' } = {}) {
   const doc = new jsPDF({ orientation: 'landscape' });
 
   doc.setFontSize(18);
@@ -104,12 +105,17 @@ export function exportEquipmentPDF(assets, { teamName = () => '—', locationNam
 
   autoTable(doc, {
     startY: 37,
-    head: [['Nome', 'Tipo', 'Modelo', 'Ano', 'Placa', 'VIN', 'Equipe', 'Supervisor', 'Status', 'Local']],
-    body: assets.map((a) => [
-      a.name, a.tipo || '—', a.model || '—', a.year || '—', a.plate || '—',
-      a.vin || '—', teamName(a.team_id), a.supervisor || '—',
-      KIND_STATUS[a.status || 'disponivel'] || '—', locationName(a.location_id),
-    ]),
+    head: [['Nome', 'Categoria', 'Modelo', 'Ano', 'Placa', 'VIN', 'Equipe', 'Supervisor', 'Status', 'Odômetro', 'Próx. óleo']],
+    body: assets.map((a) => {
+      const oil = oilStatus(a);
+      return [
+        a.name, a.tipo || '—', a.model || '—', a.year || '—', a.plate || '—',
+        a.vin || '—', teamName(a.team_id), a.supervisor || '—',
+        KIND_STATUS[a.status || 'disponivel'] || '—',
+        a.odometer != null ? fmtNum(a.odometer) : '—',
+        oil.configured ? `${fmtNum(oil.next)}${oil.remaining != null ? ` (${oil.label})` : ''}` : '—',
+      ];
+    }),
     styles: { fontSize: 8, cellPadding: 3.5 },
     headStyles: { fillColor: ACCENT, textColor: 255 },
     alternateRowStyles: { fillColor: [245, 247, 250] },

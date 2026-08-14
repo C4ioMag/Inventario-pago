@@ -11,7 +11,7 @@ import Items from './pages/Items';
 import Equipment from './pages/Equipment';
 import AssetDetail from './pages/AssetDetail';
 import Teams from './pages/Teams';
-import Registry from './pages/Registry';
+import Categories from './pages/Categories';
 import Reports from './pages/Reports';
 import History from './pages/History';
 import Invoices from './pages/Invoices';
@@ -37,7 +37,7 @@ function AppRoutes() {
         <Route path="/equipamentos" element={<Equipment />} />
         <Route path="/equipamentos/asset/:assetId" element={<AssetDetail />} />
         <Route path="/equipes" element={<Teams />} />
-        <Route path="/cadastros/:kind" element={<Registry />} />
+        <Route path="/categorias" element={<Categories />} />
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/historico" element={<History />} />
         <Route path="/invoices" element={<Invoices />} />

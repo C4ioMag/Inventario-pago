@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Download, Minus, Package, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, Download, Minus, Package, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 import PageHeader from '../components/PageHeader';
@@ -9,42 +9,37 @@ import AddItemModal from '../components/AddItemModal';
 import AdjustStockModal from '../components/AdjustStockModal';
 import InvoiceModal from '../components/InvoiceModal';
 import ConfirmDialog from '../components/ConfirmDialog';
+import TransferModal from '../components/TransferModal';
 import { exportInventoryPDF, exportInvoicePDF } from '../lib/pdf';
 import { fmtUSD } from '../lib/format';
 
 export default function Items() {
   const {
-    items, teams, registries, loading, dbConnected,
-    addItem, updateItemFields, removeItem, addStock, removeStock, registerInvoice,
+    items, teams, loading, dbConnected,
+    addItem, updateItemFields, removeItem, addStock, removeStock, transferItem, registerInvoice,
   } = useData();
   const { notify } = useToast();
 
   const [search, setSearch] = useState('');
   const [teamFilter, setTeamFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [form, setForm] = useState(null);        // { item? }
-  const [adjust, setAdjust] = useState(null);    // { mode, item }
-  const [removal, setRemoval] = useState(null);  // { item, amountRemoved }
+  const [form, setForm] = useState(null);
+  const [adjust, setAdjust] = useState(null);
+  const [removal, setRemoval] = useState(null);
+  const [transfer, setTransfer] = useState(null);
   const [confirm, setConfirm] = useState(null);
-
-  const categoryName = useMemo(() => {
-    const map = new Map(registries.categories.map((c) => [c.id, c.name]));
-    return (id) => (id ? map.get(id) || '—' : '—');
-  }, [registries.categories]);
 
   const teamName = useMemo(() => {
     const map = new Map(teams.map((t) => [t.id, t.name]));
-    return (id) => (id ? map.get(id) || '—' : 'Geral');
+    return (id) => (id ? map.get(id) || '—' : 'Yard');
   }, [teams]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((i) => {
       if (teamFilter !== 'all' && (i.team_id || 'none') !== teamFilter) return false;
-      if (categoryFilter !== 'all' && (i.category_id || 'none') !== categoryFilter) return false;
       return !q || i.name.toLowerCase().includes(q);
     });
-  }, [items, search, teamFilter, categoryFilter]);
+  }, [items, search, teamFilter]);
 
   const totalValue = useMemo(
     () => filtered.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0),
@@ -90,15 +85,10 @@ export default function Items() {
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar item…" className="input-apple pl-9" />
         </div>
-        <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="input-apple w-auto min-w-[140px]">
+        <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="input-apple w-auto min-w-[150px]">
           <option value="all">Todas as equipes</option>
-          <option value="none">Geral</option>
+          <option value="none">Yard (geral)</option>
           {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="input-apple w-auto min-w-[140px]">
-          <option value="all">Todas as categorias</option>
-          <option value="none">Sem categoria</option>
-          {registries.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
 
@@ -121,7 +111,7 @@ export default function Items() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Item</th><th>Categoria</th><th>Equipe</th>
+                  <th>Item</th><th>Equipe</th>
                   <th className="!text-right">Qtd</th><th className="!text-right">Preço/un</th><th className="!text-right">Total</th>
                   <th>Status</th><th className="!text-right">Ações</th>
                 </tr>
@@ -130,7 +120,6 @@ export default function Items() {
                 {filtered.map((i) => (
                   <tr key={i.id}>
                     <td className="cell-strong">{i.name}</td>
-                    <td>{categoryName(i.category_id)}</td>
                     <td>{teamName(i.team_id)}</td>
                     <td className="text-right tabular-nums" style={{ color: 'var(--text)' }}>{i.quantity}</td>
                     <td className="text-right tabular-nums">{fmtUSD(i.unit_price)}</td>
@@ -145,6 +134,9 @@ export default function Items() {
                         </IconBtn>
                         <IconBtn title="Adicionar" onClick={() => setAdjust({ mode: 'add', item: i })}>
                           <Plus size={14} />
+                        </IconBtn>
+                        <IconBtn title="Transferir" onClick={() => setTransfer(i)} disabled={Number(i.quantity) <= 0}>
+                          <ArrowLeftRight size={13} />
                         </IconBtn>
                         <IconBtn title="Editar" onClick={() => setForm({ item: i })}>
                           <Pencil size={13} />
@@ -165,7 +157,6 @@ export default function Items() {
       <AddItemModal
         open={Boolean(form)}
         item={form?.item}
-        registries={registries}
         teams={teams}
         onClose={() => setForm(null)}
         onSubmit={(fields) => (form?.item
@@ -174,11 +165,7 @@ export default function Items() {
               quantity: fields.quantity,
               unit_price: fields.unitPrice,
               min_quantity: fields.minQuantity,
-              category_id: fields.categoryId,
-              supplier_id: fields.supplierId,
-              location_id: fields.locationId,
               team_id: fields.teamId,
-              status: fields.status,
             })
           : addItem(fields))}
       />
@@ -189,6 +176,16 @@ export default function Items() {
         item={adjust?.item}
         onClose={() => setAdjust(null)}
         onConfirm={handleAdjustConfirm}
+      />
+
+      <TransferModal
+        open={Boolean(transfer)}
+        entity={transfer}
+        kind="item"
+        teams={teams}
+        teamNameOf={(id) => (id ? teamName(id) : null)}
+        onClose={() => setTransfer(null)}
+        onSubmit={transferItem}
       />
 
       <InvoiceModal

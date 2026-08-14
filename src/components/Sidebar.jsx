@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
-  Boxes, Building2, ClipboardList, Cog, FileBarChart, History,
-  LayoutGrid, MapPin, Package, Tags, Truck, Users,
+  ClipboardList, Cog, FileBarChart, History,
+  LayoutGrid, Package, Tags, Truck, Users,
 } from 'lucide-react';
 
 const GROUPS = [
@@ -17,19 +17,11 @@ const GROUPS = [
     ],
   },
   {
-    title: 'Cadastros',
-    items: [
-      { to: '/cadastros/categorias', label: 'Categorias', icon: Tags },
-      { to: '/cadastros/fornecedores', label: 'Fornecedores', icon: Building2 },
-      { to: '/cadastros/marcas', label: 'Marcas', icon: Boxes },
-      { to: '/cadastros/locais', label: 'Locais', icon: MapPin },
-    ],
-  },
-  {
     title: 'Relatórios',
     items: [
       { to: '/relatorios', label: 'Relatórios', icon: FileBarChart },
       { to: '/historico', label: 'Histórico', icon: History },
+      { to: '/categorias', label: 'Categorias', icon: Tags },
     ],
   },
 ];

@@ -9,9 +9,6 @@ const LOCAL_ASSETS_KEY = 'estoque_assets';
 const LOCAL_ASSET_HISTORY_KEY = 'estoque_asset_history';
 const LOCAL_MOVEMENTS_KEY = 'estoque_movements';
 const LOCAL_CATEGORIES_KEY = 'estoque_categories';
-const LOCAL_SUPPLIERS_KEY = 'estoque_suppliers';
-const LOCAL_BRANDS_KEY = 'estoque_brands';
-const LOCAL_LOCATIONS_KEY = 'estoque_locations';
 
 function readLocal(key) {
   try {
@@ -89,9 +86,6 @@ export const assetsStore = makeCrud('assets', LOCAL_ASSETS_KEY);
 export const assetHistoryStore = makeCrud('asset_parts_history', LOCAL_ASSET_HISTORY_KEY, { orderAsc: false });
 export const movementsStore = makeCrud('movements', LOCAL_MOVEMENTS_KEY, { orderAsc: false });
 export const categoriesStore = makeCrud('categories', LOCAL_CATEGORIES_KEY);
-export const suppliersStore = makeCrud('suppliers', LOCAL_SUPPLIERS_KEY);
-export const brandsStore = makeCrud('brands', LOCAL_BRANDS_KEY);
-export const locationsStore = makeCrud('locations', LOCAL_LOCATIONS_KEY);
 
 export async function listItems() {
   if (supabaseReady) {
@@ -102,22 +96,14 @@ export async function listItems() {
   return readLocal(LOCAL_ITEMS_KEY).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 }
 
-export async function createItem({
-  name, quantity, unitPrice, teamId = null,
-  categoryId = null, supplierId = null, locationId = null,
-  minQuantity = 0, status = 'disponivel',
-}) {
+export async function createItem({ name, quantity, unitPrice, teamId = null, minQuantity = 0 }) {
   const row = {
     id: genId(),
     team_id: teamId,
-    category_id: categoryId,
-    supplier_id: supplierId,
-    location_id: locationId,
     name,
     quantity,
     unit_price: unitPrice,
     min_quantity: minQuantity,
-    status,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };

@@ -9,18 +9,13 @@ import { fmtUSD } from '../lib/format';
 import { movementsThisMonth } from '../lib/movements';
 
 export default function Reports() {
-  const { items, assets, movements, invoices, teams, registries } = useData();
+  const { items, assets, movements, invoices, teams } = useData();
   const { notify } = useToast();
 
   const teamName = useMemo(() => {
     const map = new Map(teams.map((t) => [t.id, t.name]));
-    return (id) => (id ? map.get(id) || '—' : 'Sem equipe');
+    return (id) => (id ? map.get(id) || '—' : 'Yard');
   }, [teams]);
-
-  const locationName = useMemo(() => {
-    const map = new Map(registries.locations.map((l) => [l.id, l.name]));
-    return (id) => (id ? map.get(id) || '—' : '—');
-  }, [registries.locations]);
 
   const stockValue = items.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
   const invoiceTotal = invoices.reduce((s, i) => s + Number(i.total), 0);
@@ -57,9 +52,9 @@ export default function Reports() {
         <ReportCard
           icon={Truck}
           title="Equipamentos"
-          desc="Frota completa com modelo, placa, VIN, equipe, supervisor, status e local."
+          desc="Frota completa com modelo, placa, VIN, equipe, supervisor, status e próxima troca de óleo."
           count={`${assets.length} equipamento(s)`}
-          onExport={() => guard(assets, () => exportEquipmentPDF(assets, { teamName, locationName }))}
+          onExport={() => guard(assets, () => exportEquipmentPDF(assets, { teamName }))}
         />
         <ReportCard
           icon={ArrowLeftRight}

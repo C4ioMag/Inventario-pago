@@ -6,16 +6,19 @@ Sistema de controle de inventário, equipes e frota (Power Connect USA).
 (com sparklines de dados reais), inventário resumido e movimentações recentes.
 
 **Inventário**
-- *Itens*: tabela com categoria, equipe, quantidade, preço e status (disponível, estoque baixo,
-  sem estoque, manutenção). Entradas e saídas em um clique; ao retirar, oferece gerar invoice
-  (máquina + VIN) em PDF para cobrança.
-- *Equipamentos*: frota completa com tipo, modelo, ano, placa, VIN, equipe, supervisor,
-  proprietário, status, local, marca, categoria, observações e Verizon/Bouncie/Samsung/E-ZPass.
-  Cada equipamento tem página própria com histórico de peças trocadas e suas movimentações.
-- *Equipes*: agrupam equipamentos e estoque. Clicar abre um painel com tudo sob a
-  responsabilidade da equipe. Dá para renomear e excluir (nada é perdido: volta para "Sem equipe").
+- *Itens*: tabela com equipe, quantidade, preço e status (disponível, estoque baixo,
+  sem estoque). Entradas, saídas e **transferências entre equipes/Yard** em um clique;
+  ao retirar, oferece gerar invoice (máquina + VIN) em PDF para cobrança.
+- *Equipamentos*: frota completa com categoria, modelo, ano, placa, VIN, equipe, supervisor,
+  proprietário, status, observações e Verizon/Bouncie/Samsung/E-ZPass. Já no cadastro dá para
+  lançar as manutenções que o equipamento teve. **Controle de troca de óleo**: informe o
+  odômetro, o intervalo e a última troca — o sistema calcula a próxima, avisa quando está
+  perto ou atrasada, e recalcula sozinho a cada troca registrada.
+- *Equipes*: cada equipe tem dois acessos diretos — ver seus **equipamentos** e ver seus
+  **itens**. Dá para transferir de lá mesmo, renomear e excluir (nada é perdido: volta para o Yard).
 
-**Cadastros** — categorias, fornecedores, marcas e locais, com contagem de uso.
+**Categorias** — os tipos de equipamento (Truck, Trailer, Vacuum…), com atalho para
+cadastrar os padrões da frota de uma vez.
 
 **Relatórios e Histórico**
 - Histórico registra automaticamente toda entrada, saída, transferência, troca de peça,

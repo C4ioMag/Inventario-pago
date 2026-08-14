@@ -6,13 +6,6 @@ import { useAuth } from './AuthContext';
 
 const DataContext = createContext(null);
 
-const REGISTRY_STORES = {
-  categories: store.categoriesStore,
-  suppliers: store.suppliersStore,
-  brands: store.brandsStore,
-  locations: store.locationsStore,
-};
-
 export function DataProvider({ children }) {
   const [items, setItems] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -20,7 +13,7 @@ export function DataProvider({ children }) {
   const [assets, setAssets] = useState([]);
   const [assetHistory, setAssetHistory] = useState([]);
   const [movements, setMovements] = useState([]);
-  const [registries, setRegistries] = useState({ categories: [], suppliers: [], brands: [], locations: [] });
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const { notify } = useToast();
   const { user } = useAuth();
@@ -29,26 +22,23 @@ export function DataProvider({ children }) {
   const refreshAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [itemsData, invoicesData, teamsData, assetsData, historyData, movementsData,
-        categories, suppliers, brands, locations] = await Promise.all([
-        store.listItems(),
-        store.listInvoices(),
-        store.teamsStore.list(),
-        store.assetsStore.list(),
-        store.assetHistoryStore.list(),
-        store.movementsStore.list(),
-        store.categoriesStore.list(),
-        store.suppliersStore.list(),
-        store.brandsStore.list(),
-        store.locationsStore.list(),
-      ]);
+      const [itemsData, invoicesData, teamsData, assetsData, historyData, movementsData, categoriesData] =
+        await Promise.all([
+          store.listItems(),
+          store.listInvoices(),
+          store.teamsStore.list(),
+          store.assetsStore.list(),
+          store.assetHistoryStore.list(),
+          store.movementsStore.list(),
+          store.categoriesStore.list(),
+        ]);
       setItems(itemsData);
       setInvoices(invoicesData);
       setTeams(teamsData);
       setAssets(assetsData);
       setAssetHistory(historyData);
       setMovements(movementsData);
-      setRegistries({ categories, suppliers, brands, locations });
+      setCategories(categoriesData);
     } catch (err) {
       notify(err.message || 'Erro ao carregar dados', 'error');
     } finally {
@@ -108,26 +98,45 @@ export function DataProvider({ children }) {
     notify(moved ? `Equipe excluída · ${moved} registro(s) movido(s) para "Sem equipe"` : 'Equipe excluída', 'success');
   }
 
-  // ---------- Cadastros (categorias, fornecedores, marcas, locais) ----------
+  // ---------- Categorias (tipos de equipamento) ----------
 
-  async function addRegistry(kind, fields) {
-    const row = await REGISTRY_STORES[kind].create(fields);
-    setRegistries((prev) => ({ ...prev, [kind]: [...prev[kind], row] }));
-    notify('Cadastro criado', 'success');
+  async function addCategory(name) {
+    const row = await store.categoriesStore.create({ name, kind: 'asset' });
+    setCategories((prev) => [...prev, row]);
+    notify('Categoria criada', 'success');
     return row;
   }
 
-  async function updateRegistry(kind, id, patch) {
-    const updated = await REGISTRY_STORES[kind].update(id, patch);
-    setRegistries((prev) => ({ ...prev, [kind]: prev[kind].map((r) => (r.id === id ? updated : r)) }));
-    notify('Cadastro atualizado', 'success');
+  async function addCategoriesBulk(names) {
+    const existing = new Set(categories.map((c) => c.name.toLowerCase()));
+    const fresh = names.filter((n) => !existing.has(n.toLowerCase()));
+    const rows = [];
+    for (const name of fresh) {
+      rows.push(await store.categoriesStore.create({ name, kind: 'asset' }));
+    }
+    setCategories((prev) => [...prev, ...rows]);
+    notify(`${rows.length} categoria(s) adicionada(s)`, 'success');
+    return rows;
+  }
+
+  async function updateCategory(id, patch) {
+    const before = categories.find((c) => c.id === id);
+    const updated = await store.categoriesStore.update(id, patch);
+    setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    // Equipamentos guardam o nome da categoria — renomear precisa acompanhar
+    if (before && patch.name && patch.name !== before.name) {
+      const affected = assets.filter((a) => a.tipo === before.name);
+      await Promise.all(affected.map((a) => store.assetsStore.update(a.id, { tipo: patch.name })));
+      setAssets((prev) => prev.map((a) => (a.tipo === before.name ? { ...a, tipo: patch.name } : a)));
+    }
+    notify('Categoria atualizada', 'success');
     return updated;
   }
 
-  async function removeRegistry(kind, id) {
-    await REGISTRY_STORES[kind].remove(id);
-    setRegistries((prev) => ({ ...prev, [kind]: prev[kind].filter((r) => r.id !== id) }));
-    notify('Cadastro excluído', 'success');
+  async function removeCategory(id) {
+    await store.categoriesStore.remove(id);
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+    notify('Categoria excluída', 'success');
   }
 
   // ---------- Itens ----------
@@ -226,6 +235,96 @@ export function DataProvider({ children }) {
     return { item, amountRemoved: amt };
   }
 
+  /**
+   * Move uma quantidade de um item entre equipes/yard.
+   * Se o destino já tem um item com o mesmo nome, soma nele; senão cria lá.
+   */
+  async function transferItem({ itemId, quantity, toTeamId }) {
+    const source = items.find((i) => i.id === itemId);
+    if (!source) return;
+    const toId = toTeamId || null;
+    if ((source.team_id || null) === toId) {
+      notify('Origem e destino são a mesma equipe', 'info');
+      return;
+    }
+    const qty = Math.min(Number(quantity) || 0, Number(source.quantity));
+    if (qty <= 0) {
+      notify('Quantidade indisponível para transferir', 'error');
+      return;
+    }
+
+    const updatedSource = await store.updateItemQuantity(itemId, Number(source.quantity) - qty);
+
+    const existing = items.find(
+      (i) => i.id !== itemId
+        && (i.team_id || null) === toId
+        && i.name.trim().toLowerCase() === source.name.trim().toLowerCase()
+    );
+
+    let updatedDest;
+    if (existing) {
+      updatedDest = await store.updateItemQuantity(existing.id, Number(existing.quantity) + qty);
+      setItems((prev) => prev.map((i) => {
+        if (i.id === itemId) return updatedSource;
+        if (i.id === existing.id) return updatedDest;
+        return i;
+      }));
+    } else {
+      updatedDest = await store.createItem({
+        name: source.name,
+        quantity: qty,
+        unitPrice: source.unit_price,
+        minQuantity: source.min_quantity,
+        teamId: toId,
+      });
+      setItems((prev) => [...prev.map((i) => (i.id === itemId ? updatedSource : i)), updatedDest]);
+    }
+
+    const from = teamNameOf(source.team_id) || 'Yard';
+    const to = teamNameOf(toId) || 'Yard';
+    await logMovement({
+      kind: 'transferencia',
+      entity_type: 'item',
+      entity_id: itemId,
+      entity_name: source.name,
+      quantity: qty,
+      description: `${qty} un. de ${source.name}: ${from} → ${to}`,
+      from_value: from,
+      to_value: to,
+      team_id: toId,
+      team_name: teamNameOf(toId),
+    });
+    notify(`${qty} un. transferida(s) para ${to}`, 'success');
+  }
+
+  /** Move um equipamento inteiro para outra equipe/yard. */
+  async function transferAsset({ assetId, toTeamId }) {
+    const asset = assets.find((a) => a.id === assetId);
+    if (!asset) return;
+    const toId = toTeamId || null;
+    if ((asset.team_id || null) === toId) {
+      notify('Origem e destino são a mesma equipe', 'info');
+      return;
+    }
+    const from = teamNameOf(asset.team_id) || 'Yard';
+    const to = teamNameOf(toId) || 'Yard';
+    const updated = await store.assetsStore.update(assetId, { team_id: toId, updated_at: new Date().toISOString() });
+    setAssets((prev) => prev.map((a) => (a.id === assetId ? updated : a)));
+    await logMovement({
+      kind: 'transferencia',
+      entity_type: 'asset',
+      entity_id: assetId,
+      entity_name: asset.name,
+      description: `${asset.name}: ${from} → ${to}`,
+      from_value: from,
+      to_value: to,
+      team_id: toId,
+      team_name: teamNameOf(toId),
+    });
+    notify(`${asset.name} transferido para ${to}`, 'success');
+    return updated;
+  }
+
   async function registerInvoice({ item, quantity, machine, vin }) {
     const total = Number(item.unit_price) * Number(quantity);
     const invoice = await store.createInvoice({
@@ -243,7 +342,8 @@ export function DataProvider({ children }) {
 
   // ---------- Assets ----------
 
-  async function addAsset(fields) {
+  /** Cria o equipamento e, opcionalmente, já grava as manutenções que ele teve. */
+  async function addAsset(fields, initialMaintenance = []) {
     const row = await store.assetsStore.create(fields);
     setAssets((prev) => [...prev, row]);
     await logMovement({
@@ -255,6 +355,12 @@ export function DataProvider({ children }) {
       team_id: row.team_id,
       team_name: teamNameOf(row.team_id),
     });
+
+    // `assets` ainda não tem o novo registro neste render — passamos o objeto direto
+    for (const entry of initialMaintenance) {
+      await addAssetHistoryEntry({ assetId: row.id, ...entry, asset: row, silent: true });
+    }
+
     notify(`"${fields.name}" adicionado`, 'success');
     return row;
   }
@@ -317,8 +423,16 @@ export function DataProvider({ children }) {
     notify('Equipamento excluído', 'success');
   }
 
-  async function addAssetHistoryEntry({ assetId, itemId, partName, quantity, date, notes }) {
-    const asset = assets.find((a) => a.id === assetId);
+  /**
+   * Registra uma manutenção (óleo, peça, revisão...) no histórico do equipamento.
+   * Se for troca de óleo, atualiza a referência usada para prever a próxima.
+   */
+  async function addAssetHistoryEntry({
+    assetId, itemId, partName, quantity, date, notes,
+    type = 'peca', odometer = null, cost = null, silent = false, asset: assetOverride = null,
+  }) {
+    const asset = assetOverride || assets.find((a) => a.id === assetId);
+
     if (itemId) {
       const item = items.find((i) => i.id === itemId);
       if (item) {
@@ -327,26 +441,49 @@ export function DataProvider({ children }) {
         setItems((prev) => prev.map((i) => (i.id === itemId ? updated : i)));
       }
     }
+
     const row = await store.assetHistoryStore.create({
       asset_id: assetId,
       item_id: itemId || null,
+      type,
       part_name: partName,
       quantity: quantity || 1,
+      odometer: odometer === '' || odometer === null ? null : Number(odometer),
+      cost: cost === '' || cost === null ? null : Number(cost),
       date,
       notes: notes || null,
     });
     setAssetHistory((prev) => [row, ...prev]);
+
+    // Troca de óleo redefine a base do cálculo da próxima
+    if (type === 'oleo' && row.odometer != null) {
+      const patch = { last_oil_odometer: row.odometer, last_oil_date: date };
+      if (Number(row.odometer) > Number(asset?.odometer || 0)) patch.odometer = row.odometer;
+      const updatedAsset = await store.assetsStore.update(assetId, patch);
+      setAssets((prev) => prev.map((a) => (a.id === assetId ? updatedAsset : a)));
+    } else if (row.odometer != null && Number(row.odometer) > Number(asset?.odometer || 0)) {
+      const updatedAsset = await store.assetsStore.update(assetId, { odometer: row.odometer });
+      setAssets((prev) => prev.map((a) => (a.id === assetId ? updatedAsset : a)));
+    }
+
+    const typeLabel = type === 'oleo' ? 'Troca de óleo'
+      : type === 'revisao' ? 'Revisão'
+      : type === 'manutencao' ? 'Manutenção'
+      : type === 'pneu' ? 'Pneu'
+      : 'Troca de peça';
+
     await logMovement({
-      kind: 'troca_peca',
+      kind: type === 'peca' ? 'troca_peca' : 'manutencao',
       entity_type: 'asset',
       entity_id: assetId,
       entity_name: asset?.name || 'Equipamento',
       quantity: quantity || 1,
-      description: `Troca de peça: ${partName}${notes ? ` — ${notes}` : ''}`,
+      description: `${typeLabel}: ${partName}${notes ? ` — ${notes}` : ''}`,
       team_id: asset?.team_id || null,
       team_name: teamNameOf(asset?.team_id),
     });
-    notify('Troca registrada no histórico', 'success');
+
+    if (!silent) notify('Manutenção registrada no histórico', 'success');
     return row;
   }
 
@@ -359,7 +496,7 @@ export function DataProvider({ children }) {
         assets,
         assetHistory,
         movements,
-        registries,
+        categories,
         loading,
         dbConnected: supabaseReady,
         addItem,
@@ -367,13 +504,16 @@ export function DataProvider({ children }) {
         removeItem,
         addStock,
         removeStock,
+        transferItem,
+        transferAsset,
         registerInvoice,
         addTeam,
         renameTeam,
         removeTeam,
-        addRegistry,
-        updateRegistry,
-        removeRegistry,
+        addCategory,
+        addCategoriesBulk,
+        updateCategory,
+        removeCategory,
         addAsset,
         updateAsset,
         removeAsset,

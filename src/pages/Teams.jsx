@@ -1,33 +1,38 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronRight, Plus, Users, Warehouse } from 'lucide-react';
+import { Package, Plus, Truck, Users, Warehouse } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import PageHeader from '../components/PageHeader';
 import CreateTeamModal from '../components/CreateTeamModal';
 import AssetFormModal from '../components/AssetFormModal';
+import AddItemModal from '../components/AddItemModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import TeamPanel from '../components/TeamPanel';
+import TransferModal from '../components/TransferModal';
 import { fmtUSD } from '../lib/format';
 
-const UNASSIGNED = { id: null, name: 'Sem equipe' };
+const YARD = { id: null, name: 'Yard' };
 
 export default function Teams() {
   const navigate = useNavigate();
   const {
-    teams, assets, items, registries, loading,
-    addTeam, renameTeam, removeTeam, addAsset,
+    teams, assets, items, categories, loading,
+    addTeam, renameTeam, removeTeam, addAsset, addItem, transferAsset, transferItem,
   } = useData();
 
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
-  const [panelTeam, setPanelTeam] = useState(null);
+  const [panel, setPanel] = useState(null);          // { team, tab }
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [assetForm, setAssetForm] = useState(null);
+  const [itemForm, setItemForm] = useState(null);
+  const [transfer, setTransfer] = useState(null);    // { entity, kind }
 
   const assetsByTeam = useMemo(() => groupBy(assets, (a) => a.team_id || '__none__'), [assets]);
   const itemsByTeam = useMemo(() => groupBy(items, (i) => i.team_id || '__none__'), [items]);
 
-  const panelKey = panelTeam ? panelTeam.id || '__none__' : null;
+  const panelKey = panel ? panel.team.id || '__none__' : null;
+  const teamName = (id) => (id ? teams.find((t) => t.id === id)?.name || '—' : null);
 
   function stockValue(key) {
     return (itemsByTeam.get(key) || []).reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
@@ -37,7 +42,7 @@ export default function Teams() {
     <div>
       <PageHeader
         title="Equipes"
-        subtitle={`${teams.length} equipe(s) · ${assets.length} equipamento(s) distribuído(s)`}
+        subtitle={`${teams.length} equipe(s) · ${assets.length} equipamento(s) e ${items.length} item(ns) distribuídos`}
       >
         <button onClick={() => setCreateTeamOpen(true)} className="btn-primary flex items-center gap-2 px-3.5 py-2 text-[13px]">
           <Plus size={15} /> Nova equipe
@@ -46,34 +51,34 @@ export default function Teams() {
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-[112px]" />)}
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-[150px]" />)}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <TeamTile
-            label="Sem equipe"
-            sub="Pátio · não atribuído"
+          <TeamCard
+            label="Yard"
+            sub="Estoque e equipamentos sem equipe"
             assetsCount={(assetsByTeam.get('__none__') || []).length}
             itemsCount={(itemsByTeam.get('__none__') || []).length}
             value={stockValue('__none__')}
             icon={<Warehouse size={15} />}
-            onClick={() => setPanelTeam(UNASSIGNED)}
+            onOpen={(tab) => setPanel({ team: YARD, tab })}
           />
           {teams.map((t, idx) => (
-            <TeamTile
+            <TeamCard
               key={t.id}
               label={t.name}
               sub={t.supervisor ? `Supervisor · ${t.supervisor}` : 'Equipe'}
               assetsCount={(assetsByTeam.get(t.id) || []).length}
               itemsCount={(itemsByTeam.get(t.id) || []).length}
               value={stockValue(t.id)}
-              onClick={() => setPanelTeam(t)}
+              onOpen={(tab) => setPanel({ team: t, tab })}
               delay={idx * 0.03}
             />
           ))}
           <button
             onClick={() => setCreateTeamOpen(true)}
-            className="row-hover flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed"
+            className="row-hover flex min-h-[150px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed"
             style={{ borderColor: 'var(--border-strong)', color: 'var(--text-secondary)' }}
           >
             <Users size={20} strokeWidth={1.7} />
@@ -85,26 +90,30 @@ export default function Teams() {
       <CreateTeamModal open={createTeamOpen} onClose={() => setCreateTeamOpen(false)} onSubmit={addTeam} />
 
       <TeamPanel
-        open={Boolean(panelTeam)}
-        team={panelTeam}
+        open={Boolean(panel)}
+        team={panel?.team}
+        initialTab={panel?.tab}
         assets={panelKey ? assetsByTeam.get(panelKey) || [] : []}
         items={panelKey ? itemsByTeam.get(panelKey) || [] : []}
-        onClose={() => setPanelTeam(null)}
+        onClose={() => setPanel(null)}
         onOpenAsset={(a) => navigate(`/equipamentos/asset/${a.id}`)}
-        onAddAsset={() => setAssetForm({ defaultTeamId: panelTeam?.id || '' })}
+        onAddAsset={() => setAssetForm({ defaultTeamId: panel?.team.id || '' })}
+        onAddItem={() => setItemForm({ defaultTeamId: panel?.team.id || '' })}
+        onTransferAsset={(a) => setTransfer({ entity: a, kind: 'asset' })}
+        onTransferItem={(i) => setTransfer({ entity: i, kind: 'item' })}
         onRename={renameTeam}
-        onDelete={() => setConfirmDelete(panelTeam)}
+        onDelete={() => setConfirmDelete(panel?.team)}
       />
 
       <ConfirmDialog
         open={Boolean(confirmDelete)}
         onClose={() => setConfirmDelete(null)}
         title={`Excluir "${confirmDelete?.name}"?`}
-        message="Os equipamentos e itens desta equipe não serão apagados — eles voltam para “Sem equipe”."
+        message="Os equipamentos e itens desta equipe não serão apagados — eles voltam para o Yard."
         confirmLabel="Excluir equipe"
         onConfirm={async () => {
           await removeTeam(confirmDelete.id);
-          setPanelTeam(null);
+          setPanel(null);
         }}
       />
 
@@ -112,9 +121,27 @@ export default function Teams() {
         open={Boolean(assetForm)}
         defaultTeamId={assetForm?.defaultTeamId}
         teams={teams}
-        registries={registries}
+        categories={categories}
         onClose={() => setAssetForm(null)}
-        onSubmit={(fields) => addAsset(fields)}
+        onSubmit={(fields, maintenance) => addAsset(fields, maintenance)}
+      />
+
+      <AddItemModal
+        open={Boolean(itemForm)}
+        defaultTeamId={itemForm?.defaultTeamId}
+        teams={teams}
+        onClose={() => setItemForm(null)}
+        onSubmit={(fields) => addItem(fields)}
+      />
+
+      <TransferModal
+        open={Boolean(transfer)}
+        entity={transfer?.entity}
+        kind={transfer?.kind}
+        teams={teams}
+        teamNameOf={teamName}
+        onClose={() => setTransfer(null)}
+        onSubmit={transfer?.kind === 'item' ? transferItem : transferAsset}
       />
     </div>
   );
@@ -130,40 +157,46 @@ function groupBy(rows, keyOf) {
   return map;
 }
 
-function TeamTile({ label, sub, assetsCount, itemsCount, value, onClick, icon, delay = 0 }) {
+function TeamCard({ label, sub, assetsCount, itemsCount, value, onOpen, icon, delay = 0 }) {
   return (
-    <motion.button
-      onClick={onClick}
+    <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay }}
-      className="card row-hover p-5 text-left"
+      className="card flex flex-col p-5"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-[15px] font-semibold" style={{ color: 'var(--text)' }}>{label}</p>
           <p className="mt-0.5 truncate text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>{sub}</p>
         </div>
-        <span style={{ color: 'var(--text-tertiary)' }}>{icon || <ChevronRight size={16} />}</span>
+        {icon && <span style={{ color: 'var(--text-tertiary)' }}>{icon}</span>}
       </div>
 
-      <div className="mt-4 flex items-end gap-5">
-        <Metric value={assetsCount} label="equipamentos" />
-        <Metric value={itemsCount} label="itens" />
-        <div className="ml-auto text-right">
-          <p className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--text)' }}>{fmtUSD(value)}</p>
-          <p className="label-caps mt-0.5">em estoque</p>
-        </div>
+      <p className="mt-3 text-[12.5px]" style={{ color: 'var(--text-tertiary)' }}>
+        {fmtUSD(value)} em estoque
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <ViewButton icon={Truck} count={assetsCount} label="Equipamentos" onClick={() => onOpen('assets')} />
+        <ViewButton icon={Package} count={itemsCount} label="Itens" onClick={() => onOpen('items')} />
       </div>
-    </motion.button>
+    </motion.div>
   );
 }
 
-function Metric({ value, label }) {
+function ViewButton({ icon: Icon, count, label, onClick }) {
   return (
-    <div>
-      <p className="text-[21px] font-bold leading-none tabular-nums" style={{ color: 'var(--text)' }}>{value}</p>
-      <p className="label-caps mt-1">{label}</p>
-    </div>
+    <button
+      onClick={onClick}
+      className="row-hover flex flex-col items-start gap-1 rounded-lg border px-3 py-2.5 text-left transition-colors"
+      style={{ borderColor: 'var(--border)' }}
+    >
+      <span className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+        <Icon size={13} />
+        <span className="text-[11.5px] font-medium">{label}</span>
+      </span>
+      <span className="text-[19px] font-bold leading-none tabular-nums" style={{ color: 'var(--text)' }}>{count}</span>
+    </button>
   );
 }

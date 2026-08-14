@@ -1,26 +1,29 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftRight, ChevronLeft, Pencil, Trash2, Wrench } from 'lucide-react';
+import { ArrowLeftRight, ChevronLeft, Droplet, Pencil, Trash2, Wrench } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import AssetFormModal from '../components/AssetFormModal';
-import PartHistoryModal from '../components/PartHistoryModal';
+import MaintenanceModal from '../components/MaintenanceModal';
 import ConfirmDialog from '../components/ConfirmDialog';
+import TransferModal from '../components/TransferModal';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
-import { fmtDate, fmtDateTime } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtUSD } from '../lib/format';
 import { movementKind } from '../lib/movements';
+import { fmtNum, maintenanceType, oilStatus } from '../lib/maintenance';
 
 export default function AssetDetail() {
   const { assetId } = useParams();
   const navigate = useNavigate();
   const {
-    teams, assets, items, assetHistory, movements, registries, loading,
-    updateAsset, removeAsset, addAssetHistoryEntry,
+    teams, assets, items, assetHistory, movements, categories, loading,
+    updateAsset, removeAsset, addAssetHistoryEntry, transferAsset,
   } = useData();
 
   const [editOpen, setEditOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   const asset = assets.find((a) => a.id === assetId);
   const team = teams.find((t) => t.id === asset?.team_id);
@@ -42,6 +45,8 @@ export default function AssetDetail() {
     [items, asset]
   );
 
+  const teamName = (id) => (id ? teams.find((t) => t.id === id)?.name || '—' : null);
+
   if (loading) return <div className="skeleton h-[320px]" />;
   if (!asset) {
     return (
@@ -51,20 +56,21 @@ export default function AssetDetail() {
     );
   }
 
-  const nameOf = (list, id) => (id ? list.find((r) => r.id === id)?.name || '—' : '—');
+  const oil = oilStatus(asset);
+  const oilColor = oil.level === 'atrasada' ? 'var(--danger)'
+    : oil.level === 'proxima' ? 'var(--warn)'
+    : 'var(--ok)';
 
   const FIELDS = [
-    ['Tipo', asset.tipo],
+    ['Categoria', asset.tipo],
     ['Modelo', asset.model],
     ['Ano', asset.year],
     ['Placa', asset.plate],
     ['VIN Number', asset.vin],
-    ['Equipe', team?.name || 'Sem equipe'],
+    ['Equipe', team?.name || 'Yard'],
     ['Supervisor', asset.supervisor],
     ['Proprietário', asset.owner],
-    ['Categoria', nameOf(registries.categories, asset.category_id)],
-    ['Marca', nameOf(registries.brands, asset.brand_id)],
-    ['Local', nameOf(registries.locations, asset.location_id)],
+    ['Odômetro atual', asset.odometer != null ? fmtNum(asset.odometer) : null],
     ['Verizon', asset.verizon],
     ['Bouncie', asset.bouncie],
     ['Samsung', asset.samsung],
@@ -91,6 +97,9 @@ export default function AssetDetail() {
           </h1>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setTransferOpen(true)} className="btn-ghost flex items-center gap-2 px-3.5 py-2 text-[13px]">
+            <ArrowLeftRight size={14} /> Transferir
+          </button>
           <button onClick={() => setEditOpen(true)} className="btn-ghost flex items-center gap-2 px-3.5 py-2 text-[13px]">
             <Pencil size={14} /> Editar
           </button>
@@ -106,7 +115,37 @@ export default function AssetDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+      {/* Troca de óleo em destaque */}
+      <div className="card mb-4 flex flex-wrap items-center justify-between gap-4 p-5">
+        <div className="flex items-center gap-3.5">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-lg"
+            style={{ background: `color-mix(in srgb, ${oilColor} 16%, transparent)`, color: oilColor }}
+          >
+            <Droplet size={18} />
+          </div>
+          <div>
+            <p className="label-caps">Próxima troca de óleo</p>
+            {oil.configured ? (
+              <p className="mt-1 text-[17px] font-bold tabular-nums" style={{ color: 'var(--text)' }}>
+                {fmtNum(oil.next)}
+                <span className="ml-2 text-[13px] font-medium" style={{ color: oilColor }}>{oil.label}</span>
+              </p>
+            ) : (
+              <p className="mt-1 text-[13.5px]" style={{ color: 'var(--text-secondary)' }}>
+                Configure o intervalo e a última troca em “Editar”
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-6">
+          <MiniStat label="Odômetro" value={asset.odometer != null ? fmtNum(asset.odometer) : '—'} />
+          <MiniStat label="Intervalo" value={asset.oil_interval ? fmtNum(asset.oil_interval) : '—'} />
+          <MiniStat label="Última troca" value={asset.last_oil_date ? fmtDate(asset.last_oil_date) : '—'} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
         <section className="card overflow-hidden">
           <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--border)' }}>
             <h2 className="text-[14px] font-semibold" style={{ color: 'var(--text)' }}>Informações</h2>
@@ -132,30 +171,43 @@ export default function AssetDetail() {
         <div className="space-y-4">
           <section className="card overflow-hidden">
             <div className="flex items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: 'var(--border)' }}>
-              <h2 className="text-[14px] font-semibold" style={{ color: 'var(--text)' }}>
-                Histórico de peças trocadas
-              </h2>
-              <button onClick={() => setHistoryOpen(true)} className="btn-primary flex items-center gap-2 px-3 py-1.5 text-[12.5px]">
-                <Wrench size={13} /> Registrar troca
+              <h2 className="text-[14px] font-semibold" style={{ color: 'var(--text)' }}>Histórico de manutenção</h2>
+              <button onClick={() => setMaintenanceOpen(true)} className="btn-primary flex items-center gap-2 px-3 py-1.5 text-[12.5px]">
+                <Wrench size={13} /> Registrar
               </button>
             </div>
             {history.length === 0 ? (
-              <EmptyState icon={Wrench} title="Nenhuma troca registrada" hint="Registre peças trocadas para manter a manutenção rastreada." />
+              <EmptyState icon={Wrench} title="Nenhuma manutenção registrada" hint="Registre trocas de óleo, peças e revisões para manter o histórico." />
             ) : (
               <div className="overflow-x-auto">
                 <table className="tbl">
                   <thead>
-                    <tr><th>Peça</th><th>Observação</th><th className="!text-right">Qtd</th><th className="!text-right">Data</th></tr>
+                    <tr>
+                      <th>Tipo</th><th>Descrição</th><th className="!text-right">Odômetro</th>
+                      <th className="!text-right">Custo</th><th className="!text-right">Data</th>
+                    </tr>
                   </thead>
                   <tbody>
-                    {history.map((h) => (
-                      <tr key={h.id}>
-                        <td className="cell-strong">{h.part_name}</td>
-                        <td>{h.notes || '—'}</td>
-                        <td className="text-right tabular-nums" style={{ color: 'var(--text)' }}>{h.quantity}</td>
-                        <td className="whitespace-nowrap text-right tabular-nums">{fmtDate(h.date)}</td>
-                      </tr>
-                    ))}
+                    {history.map((h) => {
+                      const t = maintenanceType(h.type);
+                      return (
+                        <tr key={h.id}>
+                          <td>
+                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium" style={{ color: t.color }}>
+                              <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.color }} />
+                              {t.label}
+                            </span>
+                          </td>
+                          <td className="cell-strong">
+                            {h.part_name}
+                            {h.notes && <span className="ml-1.5 font-normal" style={{ color: 'var(--text-secondary)' }}>· {h.notes}</span>}
+                          </td>
+                          <td className="text-right tabular-nums">{h.odometer != null ? fmtNum(h.odometer) : '—'}</td>
+                          <td className="text-right tabular-nums">{h.cost != null ? fmtUSD(h.cost) : '—'}</td>
+                          <td className="whitespace-nowrap text-right tabular-nums">{fmtDate(h.date)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -167,7 +219,7 @@ export default function AssetDetail() {
               <h2 className="text-[14px] font-semibold" style={{ color: 'var(--text)' }}>Movimentações deste equipamento</h2>
             </div>
             {assetMovements.length === 0 ? (
-              <EmptyState icon={ArrowLeftRight} title="Nenhuma movimentação" hint="Transferências de equipe, mudanças de status e trocas aparecem aqui." />
+              <EmptyState icon={ArrowLeftRight} title="Nenhuma movimentação" hint="Transferências entre equipes e yard aparecem aqui." />
             ) : (
               <div className="overflow-x-auto">
                 <table className="tbl">
@@ -205,27 +257,47 @@ export default function AssetDetail() {
         onSubmit={(fields) => updateAsset(asset.id, fields)}
         asset={asset}
         teams={teams}
-        registries={registries}
+        categories={categories}
       />
 
-      <PartHistoryModal
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
+      <MaintenanceModal
+        open={maintenanceOpen}
+        assetName={asset.name}
+        onClose={() => setMaintenanceOpen(false)}
         onSubmit={(entry) => addAssetHistoryEntry({ assetId: asset.id, ...entry })}
         items={availableItems}
+      />
+
+      <TransferModal
+        open={transferOpen}
+        entity={asset}
+        kind="asset"
+        teams={teams}
+        teamNameOf={teamName}
+        onClose={() => setTransferOpen(false)}
+        onSubmit={transferAsset}
       />
 
       <ConfirmDialog
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         title={`Excluir "${asset.name}"?`}
-        message="O equipamento e todo o histórico de peças dele serão apagados. Essa ação não pode ser desfeita."
+        message="O equipamento e todo o histórico de manutenção dele serão apagados. Essa ação não pode ser desfeita."
         confirmLabel="Excluir equipamento"
         onConfirm={async () => {
           await removeAsset(asset.id);
           navigate('/equipamentos');
         }}
       />
+    </div>
+  );
+}
+
+function MiniStat({ label, value }) {
+  return (
+    <div>
+      <p className="label-caps">{label}</p>
+      <p className="mt-1 text-[14px] font-semibold tabular-nums" style={{ color: 'var(--text)' }}>{value}</p>
     </div>
   );
 }

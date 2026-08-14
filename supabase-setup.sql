@@ -13,55 +13,27 @@ create table if not exists teams (
 );
 alter table teams add column if not exists supervisor text;
 
--- CADASTROS AUXILIARES
+-- CATEGORIAS (tipos de equipamento: Truck, Trailer, Vacuum, ...)
 create table if not exists categories (
   id text primary key,
   name text not null,
-  kind text not null default 'item',   -- 'item' | 'asset'
+  kind text not null default 'asset',
   created_at timestamptz default now()
 );
 
-create table if not exists suppliers (
-  id text primary key,
-  name text not null,
-  contact text,
-  notes text,
-  created_at timestamptz default now()
-);
-
-create table if not exists brands (
-  id text primary key,
-  name text not null,
-  created_at timestamptz default now()
-);
-
-create table if not exists locations (
-  id text primary key,
-  name text not null,
-  created_at timestamptz default now()
-);
-
--- ITENS DE ESTOQUE (por equipe; team_id nulo = estoque geral)
+-- ITENS DE ESTOQUE (por equipe; team_id nulo = Yard / estoque geral)
 create table if not exists items (
   id text primary key,
   team_id text references teams(id) on delete set null,
-  category_id text references categories(id) on delete set null,
-  supplier_id text references suppliers(id) on delete set null,
-  location_id text references locations(id) on delete set null,
   name text not null,
   quantity numeric not null default 0,
   unit_price numeric not null default 0,
   min_quantity numeric not null default 0,
-  status text not null default 'disponivel',  -- 'disponivel' | 'manutencao' | 'indisponivel'
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 alter table items add column if not exists team_id text references teams(id) on delete set null;
-alter table items add column if not exists category_id text references categories(id) on delete set null;
-alter table items add column if not exists supplier_id text references suppliers(id) on delete set null;
-alter table items add column if not exists location_id text references locations(id) on delete set null;
 alter table items add column if not exists min_quantity numeric not null default 0;
-alter table items add column if not exists status text not null default 'disponivel';
 
 -- Numeração sequencial de invoices (começa em 1001)
 create sequence if not exists invoice_number_seq start 1001;
@@ -80,14 +52,11 @@ create table if not exists invoices (
   created_at timestamptz default now()
 );
 
--- ASSETS (veículos, trailers, máquinas)
+-- EQUIPAMENTOS (veículos, trailers, máquinas)
 create table if not exists assets (
   id text primary key,
   team_id text references teams(id) on delete set null,
-  category_id text references categories(id) on delete set null,
-  brand_id text references brands(id) on delete set null,
-  location_id text references locations(id) on delete set null,
-  tipo text,
+  tipo text,                       -- nome da categoria (Truck, Trailer, ...)
   name text not null,
   model text,
   year text,
@@ -97,6 +66,11 @@ create table if not exists assets (
   owner text,
   notes text,
   status text not null default 'disponivel',  -- 'disponivel' | 'em_uso' | 'manutencao'
+  -- Manutenção / troca de óleo
+  odometer numeric,                -- milhagem/horas atuais
+  oil_interval numeric,            -- intervalo de troca (mesma unidade do odômetro)
+  last_oil_odometer numeric,       -- odômetro na última troca
+  last_oil_date text,              -- data da última troca (YYYY-MM-DD)
   verizon text,
   bouncie text,
   samsung text,
@@ -104,24 +78,31 @@ create table if not exists assets (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-alter table assets add column if not exists category_id text references categories(id) on delete set null;
-alter table assets add column if not exists brand_id text references brands(id) on delete set null;
-alter table assets add column if not exists location_id text references locations(id) on delete set null;
 alter table assets add column if not exists status text not null default 'disponivel';
+alter table assets add column if not exists odometer numeric;
+alter table assets add column if not exists oil_interval numeric;
+alter table assets add column if not exists last_oil_odometer numeric;
+alter table assets add column if not exists last_oil_date text;
 
--- HISTÓRICO DE PEÇAS TROCADAS POR ASSET
+-- HISTÓRICO DE MANUTENÇÃO POR EQUIPAMENTO (peças, óleo, revisão)
 create table if not exists asset_parts_history (
   id text primary key,
   asset_id text not null references assets(id) on delete cascade,
   item_id text references items(id) on delete set null,
+  type text not null default 'peca',   -- 'peca' | 'oleo' | 'manutencao' | 'revisao' | 'pneu'
   part_name text not null,
   quantity numeric not null default 1,
+  odometer numeric,
+  cost numeric,
   date text not null,
   notes text,
   created_at timestamptz default now()
 );
+alter table asset_parts_history add column if not exists type text not null default 'peca';
+alter table asset_parts_history add column if not exists odometer numeric;
+alter table asset_parts_history add column if not exists cost numeric;
 
--- MOVIMENTAÇÕES — trilha de tudo que entra, sai, muda de equipe/local/status
+-- MOVIMENTAÇÕES — trilha de tudo que entra, sai ou muda de equipe
 create table if not exists movements (
   id text primary key,
   kind text not null,             -- 'entrada'|'saida'|'transferencia'|'manutencao'|'cadastro'|'edicao'|'exclusao'|'troca_peca'
@@ -143,9 +124,6 @@ create index if not exists movements_entity_idx on movements (entity_type, entit
 -- App interno, usuário único autenticado no próprio app (sem Supabase Auth) — RLS desabilitado
 alter table teams                disable row level security;
 alter table categories           disable row level security;
-alter table suppliers            disable row level security;
-alter table brands               disable row level security;
-alter table locations            disable row level security;
 alter table items                disable row level security;
 alter table invoices             disable row level security;
 alter table assets               disable row level security;

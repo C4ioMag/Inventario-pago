@@ -1,33 +1,26 @@
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, Boxes, Package, Truck, Users } from 'lucide-react';
+import { ArrowLeftRight, Boxes, Droplet, Package, Truck, Users } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 import StatusBadge, { itemStatus } from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
+import { OilCell } from './Equipment';
+import { oilAlerts } from '../lib/maintenance';
 import { cumulativeSeries, dailySeries, movementKind, movementsThisMonth } from '../lib/movements';
 import { fmtDateTime } from '../lib/format';
 
 export default function Overview() {
-  const { items, assets, teams, movements, registries, loading } = useData();
+  const { items, assets, teams, movements, loading } = useData();
   const navigate = useNavigate();
 
   const monthMovements = useMemo(() => movementsThisMonth(movements), [movements]);
-
-  const categoryName = useMemo(() => {
-    const map = new Map(registries.categories.map((c) => [c.id, c.name]));
-    return (id) => (id ? map.get(id) || '—' : '—');
-  }, [registries.categories]);
-
-  const locationName = useMemo(() => {
-    const map = new Map(registries.locations.map((l) => [l.id, l.name]));
-    return (id) => (id ? map.get(id) || '—' : '—');
-  }, [registries.locations]);
+  const oilDue = useMemo(() => oilAlerts(assets), [assets]);
 
   const teamName = useMemo(() => {
     const map = new Map(teams.map((t) => [t.id, t.name]));
-    return (id) => (id ? map.get(id) || '—' : 'Geral');
+    return (id) => (id ? map.get(id) || '—' : 'Yard');
   }, [teams]);
 
   const totalUnits = useMemo(
@@ -93,6 +86,30 @@ export default function Overview() {
         />
       </div>
 
+      {oilDue.length > 0 && (
+        <div
+          className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-5 py-3.5"
+          style={{ borderColor: 'var(--warn)', background: 'var(--warn-soft)' }}
+        >
+          <span className="flex items-center gap-2 text-[13.5px] font-semibold" style={{ color: 'var(--warn)' }}>
+            <Droplet size={15} />
+            Troca de óleo: {oilDue.length} equipamento(s)
+          </span>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {oilDue.slice(0, 5).map(({ asset, oil }) => (
+              <button
+                key={asset.id}
+                onClick={() => navigate(`/equipamentos/asset/${asset.id}`)}
+                className="text-[12.5px] underline-offset-2 hover:underline"
+                style={{ color: 'var(--text)' }}
+              >
+                {asset.name} <span style={{ color: 'var(--text-secondary)' }}>· {oil.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel title="Inventário de Itens" to="/itens">
           {items.length === 0 ? (
@@ -101,14 +118,13 @@ export default function Overview() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Item</th><th>Categoria</th><th>Equipe</th><th className="!text-right">Qtd</th><th>Status</th>
+                  <th>Item</th><th>Equipe</th><th className="!text-right">Qtd</th><th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {items.slice(0, 5).map((i) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => navigate('/itens')}>
                     <td className="cell-strong">{i.name}</td>
-                    <td>{categoryName(i.category_id)}</td>
                     <td>{teamName(i.team_id)}</td>
                     <td className="text-right tabular-nums" style={{ color: 'var(--text)' }}>{i.quantity}</td>
                     <td><StatusBadge status={itemStatus(i)} /></td>
@@ -127,17 +143,17 @@ export default function Overview() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Equipamento</th><th>Categoria</th><th>Equipe</th><th>Status</th><th>Local</th>
+                  <th>Equipamento</th><th>Categoria</th><th>Equipe</th><th>Status</th><th>Próx. óleo</th>
                 </tr>
               </thead>
               <tbody>
                 {assets.slice(0, 5).map((a) => (
                   <tr key={a.id} className="cursor-pointer" onClick={() => navigate(`/equipamentos/asset/${a.id}`)}>
                     <td className="cell-strong">{a.name}</td>
-                    <td>{a.tipo || categoryName(a.category_id)}</td>
+                    <td>{a.tipo || '—'}</td>
                     <td>{teamName(a.team_id)}</td>
                     <td><StatusBadge status={a.status || 'disponivel'} /></td>
-                    <td>{locationName(a.location_id)}</td>
+                    <td><OilCell asset={a} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -176,7 +192,7 @@ export default function Overview() {
                           </span>
                         </td>
                         <td style={{ color: 'var(--text)' }}>{m.description}</td>
-                        <td>{m.team_name || 'Geral'}</td>
+                        <td>{m.team_name || 'Yard'}</td>
                         <td>{m.user_name || '—'}</td>
                       </tr>
                     );

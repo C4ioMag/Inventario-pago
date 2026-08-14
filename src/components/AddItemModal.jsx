@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
 
-const BLANK = {
-  name: '', quantity: '', unit_price: '', min_quantity: '3',
-  category_id: '', supplier_id: '', location_id: '', team_id: '', status: 'disponivel',
-};
+const BLANK = { name: '', quantity: '', unit_price: '', min_quantity: '3', team_id: '' };
 
-export default function AddItemModal({ open, onClose, onSubmit, item, registries, teams, defaultTeamId }) {
+export default function AddItemModal({ open, onClose, onSubmit, item, teams, defaultTeamId }) {
   const [form, setForm] = useState(BLANK);
   const [saving, setSaving] = useState(false);
   const isEdit = Boolean(item);
@@ -19,11 +16,7 @@ export default function AddItemModal({ open, onClose, onSubmit, item, registries
         quantity: String(item.quantity ?? ''),
         unit_price: String(item.unit_price ?? ''),
         min_quantity: String(item.min_quantity ?? 0),
-        category_id: item.category_id || '',
-        supplier_id: item.supplier_id || '',
-        location_id: item.location_id || '',
         team_id: item.team_id || '',
-        status: item.status || 'disponivel',
       });
     } else {
       setForm({ ...BLANK, team_id: defaultTeamId || '' });
@@ -41,11 +34,7 @@ export default function AddItemModal({ open, onClose, onSubmit, item, registries
         quantity: Number(form.quantity) || 0,
         unitPrice: Number(form.unit_price) || 0,
         minQuantity: Number(form.min_quantity) || 0,
-        categoryId: form.category_id || null,
-        supplierId: form.supplier_id || null,
-        locationId: form.location_id || null,
         teamId: form.team_id || null,
-        status: form.status,
       });
       onClose();
     } finally {
@@ -59,9 +48,9 @@ export default function AddItemModal({ open, onClose, onSubmit, item, registries
       onClose={onClose}
       title={isEdit ? 'Editar item' : 'Novo item'}
       subtitle={isEdit ? item?.name : 'Adicione um item ao inventário'}
-      maxWidth={520}
+      maxWidth={440}
     >
-      <form onSubmit={handleSubmit} className="max-h-[68vh] space-y-3.5 overflow-y-auto pr-1">
+      <form onSubmit={handleSubmit} className="space-y-3.5">
         <Field label="Nome do item">
           <input required autoFocus value={form.name} onChange={set('name')} placeholder="Ex: Cone de Sinalização" className="input-apple" />
         </Field>
@@ -78,37 +67,10 @@ export default function AddItemModal({ open, onClose, onSubmit, item, registries
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Categoria">
-            <select value={form.category_id} onChange={set('category_id')} className="input-apple">
-              <option value="">— Nenhuma —</option>
-              {registries.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Equipe">
-            <select value={form.team_id} onChange={set('team_id')} className="input-apple">
-              <option value="">Geral</option>
-              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Fornecedor">
-            <select value={form.supplier_id} onChange={set('supplier_id')} className="input-apple">
-              <option value="">— Nenhum —</option>
-              {registries.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Local">
-            <select value={form.location_id} onChange={set('location_id')} className="input-apple">
-              <option value="">— Nenhum —</option>
-              {registries.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-          </Field>
-        </div>
-
-        <Field label="Status">
-          <select value={form.status} onChange={set('status')} className="input-apple">
-            <option value="disponivel">Disponível</option>
-            <option value="manutencao">Manutenção</option>
+        <Field label="Equipe">
+          <select value={form.team_id} onChange={set('team_id')} className="input-apple">
+            <option value="">Yard (geral)</option>
+            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </Field>
 

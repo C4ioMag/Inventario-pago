@@ -1,35 +1,33 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, Plus, Search, Truck } from 'lucide-react';
+import { ArrowLeftRight, Pencil, Plus, Search, Truck } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
 import AssetFormModal from '../components/AssetFormModal';
+import TransferModal from '../components/TransferModal';
+import { oilStatus, fmtNum } from '../lib/maintenance';
 
 export default function Equipment() {
   const navigate = useNavigate();
-  const { assets, teams, registries, loading, addAsset, updateAsset } = useData();
+  const { assets, teams, categories, loading, addAsset, updateAsset, transferAsset } = useData();
 
   const [search, setSearch] = useState('');
   const [teamFilter, setTeamFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [form, setForm] = useState(null);
+  const [transfer, setTransfer] = useState(null);
 
   const teamName = useMemo(() => {
     const map = new Map(teams.map((t) => [t.id, t.name]));
-    return (id) => (id ? map.get(id) || '—' : 'Sem equipe');
+    return (id) => (id ? map.get(id) || '—' : 'Yard');
   }, [teams]);
 
-  const locationName = useMemo(() => {
-    const map = new Map(registries.locations.map((l) => [l.id, l.name]));
-    return (id) => (id ? map.get(id) || '—' : '—');
-  }, [registries.locations]);
-
   const types = useMemo(
-    () => [...new Set(assets.map((a) => a.tipo).filter(Boolean))].sort(),
-    [assets]
+    () => [...new Set([...categories.map((c) => c.name), ...assets.map((a) => a.tipo)].filter(Boolean))].sort(),
+    [categories, assets]
   );
 
   const filtered = useMemo(() => {
@@ -64,11 +62,11 @@ export default function Equipment() {
         </div>
         <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="input-apple w-auto min-w-[140px]">
           <option value="all">Todas as equipes</option>
-          <option value="none">Sem equipe</option>
+          <option value="none">Yard</option>
           {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="input-apple w-auto min-w-[130px]">
-          <option value="all">Todos os tipos</option>
+          <option value="all">Todas as categorias</option>
           {types.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-apple w-auto min-w-[130px]">
@@ -98,8 +96,8 @@ export default function Equipment() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Equipamento</th><th>Tipo</th><th>Modelo</th><th>Ano</th><th>Placa</th>
-                  <th>Equipe</th><th>Status</th><th>Local</th><th className="!text-right">Ações</th>
+                  <th>Equipamento</th><th>Categoria</th><th>Modelo</th><th>Ano</th><th>Placa</th>
+                  <th>Equipe</th><th>Status</th><th>Próxima troca de óleo</th><th className="!text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -112,18 +110,15 @@ export default function Equipment() {
                     <td>{a.plate || '—'}</td>
                     <td>{teamName(a.team_id)}</td>
                     <td><StatusBadge status={a.status || 'disponivel'} /></td>
-                    <td>{locationName(a.location_id)}</td>
-                    <td>
-                      <div className="flex justify-end">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setForm({ asset: a }); }}
-                          title="Editar"
-                          aria-label={`Editar ${a.name}`}
-                          className="flex h-7 w-7 items-center justify-center rounded-md border transition-colors"
-                          style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                        >
+                    <td><OilCell asset={a} /></td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        <IconBtn title="Transferir" onClick={() => setTransfer(a)}>
+                          <ArrowLeftRight size={13} />
+                        </IconBtn>
+                        <IconBtn title="Editar" onClick={() => setForm({ asset: a })}>
                           <Pencil size={13} />
-                        </button>
+                        </IconBtn>
                       </div>
                     </td>
                   </tr>
@@ -138,10 +133,52 @@ export default function Equipment() {
         open={Boolean(form)}
         asset={form?.asset}
         teams={teams}
-        registries={registries}
+        categories={categories}
         onClose={() => setForm(null)}
-        onSubmit={(fields) => (form?.asset ? updateAsset(form.asset.id, fields) : addAsset(fields))}
+        onSubmit={(fields, maintenance) => (form?.asset
+          ? updateAsset(form.asset.id, fields)
+          : addAsset(fields, maintenance))}
+      />
+
+      <TransferModal
+        open={Boolean(transfer)}
+        entity={transfer}
+        kind="asset"
+        teams={teams}
+        teamNameOf={(id) => (id ? teamName(id) : null)}
+        onClose={() => setTransfer(null)}
+        onSubmit={transferAsset}
       />
     </div>
+  );
+}
+
+export function OilCell({ asset }) {
+  const oil = oilStatus(asset);
+  if (!oil.configured) return <span style={{ color: 'var(--text-tertiary)' }}>—</span>;
+
+  const color = oil.level === 'atrasada' ? 'var(--danger)'
+    : oil.level === 'proxima' ? 'var(--warn)'
+    : 'var(--text-secondary)';
+
+  return (
+    <span className="whitespace-nowrap" style={{ color }}>
+      <span className="tabular-nums" style={{ color: 'var(--text)' }}>{fmtNum(oil.next)}</span>
+      {oil.remaining != null && <span className="ml-1.5 text-[12px]">({oil.label})</span>}
+    </span>
+  );
+}
+
+function IconBtn({ children, title, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="flex h-7 w-7 items-center justify-center rounded-md border transition-colors"
+      style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+    >
+      {children}
+    </button>
   );
 }
