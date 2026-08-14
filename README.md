@@ -6,24 +6,33 @@ Sistema de controle de inventário, equipes e frota (Power Connect USA).
 (com sparklines de dados reais), inventário resumido e movimentações recentes.
 
 **Inventário**
-- *Itens*: tabela com equipe, quantidade, preço e status (disponível, estoque baixo,
-  sem estoque). Entradas, saídas e **transferências entre equipes/Yard** em um clique;
-  ao retirar, oferece gerar invoice (máquina + VIN) em PDF para cobrança.
+- *Itens*: nome, quantidade, equipe e — só quando o item é cobrado — preço unitário.
+  Entradas, saídas e **transferências entre equipes/Yard** em um clique; ao retirar,
+  oferece gerar invoice (máquina + VIN) em PDF para cobrança.
 - *Equipamentos*: frota completa com categoria, modelo, ano, placa, VIN, equipe, supervisor,
   proprietário, status, observações e Verizon/Bouncie/Samsung/E-ZPass. Já no cadastro dá para
-  lançar as manutenções que o equipamento teve. **Controle de troca de óleo**: informe o
-  odômetro, o intervalo e a última troca — o sistema calcula a próxima, avisa quando está
-  perto ou atrasada, e recalcula sozinho a cada troca registrada.
-- *Equipes*: cada equipe tem dois acessos diretos — ver seus **equipamentos** e ver seus
-  **itens**. Dá para transferir de lá mesmo, renomear e excluir (nada é perdido: volta para o Yard).
+  lançar as manutenções que o equipamento teve. Cada tipo de manutenção pede os campos certos:
+  **troca de óleo** (tipo de óleo, litros, filtros), **troca de pneus** (posições, marca,
+  medida, alinhamento), **troca de peças** (part number, marca, fornecedor, garantia) e revisão.
+  **Controle de troca de óleo**: informe o odômetro, o intervalo e a última troca — o sistema
+  calcula a próxima, avisa quando está perto ou atrasada, e recalcula a cada troca registrada.
+- *Equipes*: clicar no card abre o painel com dois acessos — ver seus **equipamentos** e ver
+  seus **itens**. Dá para transferir de lá mesmo, editar nome e supervisor, e excluir
+  (nada é perdido: volta para o Yard). Buscar o nome da equipe no topo abre o painel direto.
+
+**Documentos** — envie PDFs, planilhas e fotos (arraste ou clique). Se for planilha, o sistema
+oferece **importar os dados** direto: reconhece as colunas (código, tipo, modelo, placa, VIN,
+equipe, supervisor…) e cria os equipamentos ou itens em lote, casando com as equipes e
+categorias que já existem.
 
 **Categorias** — os tipos de equipamento (Truck, Trailer, Vacuum…), com atalho para
 cadastrar os padrões da frota de uma vez.
 
 **Relatórios e Histórico**
-- Histórico registra automaticamente toda entrada, saída, transferência, troca de peça,
-  mudança de status, cadastro e exclusão — com data, quantidade, equipe e usuário.
-- Exportação em PDF de itens, equipamentos e do histórico completo.
+- Histórico mostra as **transferências** por padrão, com o **motivo de cada uma**
+  (ex.: "veio para o Yard Apopka pois estava quebrada") — a observação pode ser escrita na
+  hora da transferência ou adicionada depois.
+- Exportação em PDF de itens, equipamentos e do histórico.
 
 Também: busca global, alertas de estoque baixo, modo claro/escuro e login protegido por senha.
 
