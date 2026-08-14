@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Pencil, Wrench, PackageSearch } from 'lucide-react';
+import { ChevronLeft, Pencil, Trash2, Wrench, PackageSearch } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import AssetFormModal from '../components/AssetFormModal';
 import PartHistoryModal from '../components/PartHistoryModal';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { fmtDate } from '../lib/format';
 
 const FIELDS = [
@@ -22,11 +23,12 @@ const FIELDS = [
 ];
 
 export default function AssetDetail() {
-  const { teamId: rawTeamId, assetId } = useParams();
+  const { assetId } = useParams();
   const navigate = useNavigate();
-  const { teams, assets, items, assetHistory, loading, updateAsset, addAssetHistoryEntry } = useData();
+  const { teams, assets, items, assetHistory, loading, updateAsset, removeAsset, addAssetHistoryEntry } = useData();
   const [editOpen, setEditOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const asset = assets.find((a) => a.id === assetId);
   const team = teams.find((t) => t.id === asset?.team_id);
@@ -57,10 +59,10 @@ export default function AssetDetail() {
   return (
     <div>
       <button
-        onClick={() => navigate(`/equipamentos/${rawTeamId}`)}
+        onClick={() => navigate('/equipamentos')}
         className="btn-ghost mb-5 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px]"
       >
-        <ChevronLeft size={15} /> Voltar
+        <ChevronLeft size={15} /> Equipamentos
       </button>
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -68,9 +70,19 @@ export default function AssetDetail() {
           <p className="label-caps">{asset.tipo}</p>
           <h1 className="mt-1 text-[26px] font-bold" style={{ color: 'var(--text)', letterSpacing: '-0.02em' }}>{asset.name}</h1>
         </div>
-        <button onClick={() => setEditOpen(true)} className="btn-ghost flex items-center gap-2 px-4 py-2.5 text-[13px]">
-          <Pencil size={14} /> Editar
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setEditOpen(true)} className="btn-ghost flex items-center gap-2 px-4 py-2.5 text-[13px]">
+            <Pencil size={14} /> Editar
+          </button>
+          <button
+            onClick={() => setConfirmOpen(true)}
+            className="btn-ghost flex h-[42px] w-[42px] items-center justify-center"
+            title="Excluir veículo"
+            aria-label="Excluir veículo"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
       </div>
 
       <div className="surface row-divide mb-8 overflow-hidden rounded-[16px]">
@@ -138,6 +150,18 @@ export default function AssetDetail() {
         onClose={() => setHistoryOpen(false)}
         onSubmit={(entry) => addAssetHistoryEntry({ assetId: asset.id, ...entry })}
         items={availableItems}
+      />
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title={`Excluir "${asset.name}"?`}
+        message="O veículo e todo o histórico de peças dele serão apagados. Essa ação não pode ser desfeita."
+        confirmLabel="Excluir veículo"
+        onConfirm={async () => {
+          await removeAsset(asset.id);
+          navigate('/equipamentos');
+        }}
       />
     </div>
   );

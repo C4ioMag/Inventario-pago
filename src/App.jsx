@@ -9,7 +9,6 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Invoices from './pages/Invoices';
 import Teams from './pages/Teams';
-import TeamAssets from './pages/TeamAssets';
 import AssetDetail from './pages/AssetDetail';
 
 function AppRoutes() {
@@ -29,8 +28,7 @@ function AppRoutes() {
       >
         <Route path="/" element={<Dashboard />} />
         <Route path="/equipamentos" element={<Teams />} />
-        <Route path="/equipamentos/:teamId" element={<TeamAssets />} />
-        <Route path="/equipamentos/:teamId/:assetId" element={<AssetDetail />} />
+        <Route path="/equipamentos/asset/:assetId" element={<AssetDetail />} />
         <Route path="/invoices" element={<Invoices />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -113,24 +113,32 @@ export async function createItem({ name, quantity, unitPrice, teamId = null }) {
   return row;
 }
 
-export async function updateItemQuantity(id, newQuantity) {
-  const updated_at = new Date().toISOString();
+export async function updateItem(id, patch) {
+  const body = { ...patch, updated_at: new Date().toISOString() };
   if (supabaseReady) {
-    const { data, error } = await supabase
-      .from('items')
-      .update({ quantity: newQuantity, updated_at })
-      .eq('id', id)
-      .select()
-      .single();
+    const { data, error } = await supabase.from('items').update(body).eq('id', id).select().single();
     if (error) throw error;
     return data;
   }
   const items = readLocal(LOCAL_ITEMS_KEY);
   const idx = items.findIndex((i) => i.id === id);
   if (idx === -1) throw new Error('Item não encontrado');
-  items[idx] = { ...items[idx], quantity: newQuantity, updated_at };
+  items[idx] = { ...items[idx], ...body };
   writeLocal(LOCAL_ITEMS_KEY, items);
   return items[idx];
+}
+
+export function updateItemQuantity(id, newQuantity) {
+  return updateItem(id, { quantity: newQuantity });
+}
+
+export async function deleteItem(id) {
+  if (supabaseReady) {
+    const { error } = await supabase.from('items').delete().eq('id', id);
+    if (error) throw error;
+    return;
+  }
+  writeLocal(LOCAL_ITEMS_KEY, readLocal(LOCAL_ITEMS_KEY).filter((i) => i.id !== id));
 }
 
 export async function listInvoices() {

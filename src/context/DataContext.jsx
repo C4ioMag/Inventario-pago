@@ -49,6 +49,32 @@ export function DataProvider({ children }) {
     return row;
   }
 
+  async function renameTeam(id, name) {
+    const updated = await store.teamsStore.update(id, { name });
+    setTeams((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    notify('Equipe renomeada', 'success');
+    return updated;
+  }
+
+  /** Exclui a equipe. Veículos e itens dela voltam para "Sem equipe" em vez de sumirem. */
+  async function removeTeam(id) {
+    const orphanAssets = assets.filter((a) => a.team_id === id);
+    const orphanItems = items.filter((i) => i.team_id === id);
+
+    await Promise.all([
+      ...orphanAssets.map((a) => store.assetsStore.update(a.id, { team_id: null })),
+      ...orphanItems.map((i) => store.updateItem(i.id, { team_id: null })),
+    ]);
+    await store.teamsStore.remove(id);
+
+    setAssets((prev) => prev.map((a) => (a.team_id === id ? { ...a, team_id: null } : a)));
+    setItems((prev) => prev.map((i) => (i.team_id === id ? { ...i, team_id: null } : i)));
+    setTeams((prev) => prev.filter((t) => t.id !== id));
+
+    const moved = orphanAssets.length + orphanItems.length;
+    notify(moved ? `Equipe excluída · ${moved} registro(s) movido(s) para "Sem equipe"` : 'Equipe excluída', 'success');
+  }
+
   // ---------- Items / Estoque ----------
 
   async function addItem(name, quantity, unitPrice, teamId = null) {
@@ -107,6 +133,15 @@ export function DataProvider({ children }) {
     return updated;
   }
 
+  async function removeAsset(id) {
+    const related = assetHistory.filter((h) => h.asset_id === id);
+    await Promise.all(related.map((h) => store.assetHistoryStore.remove(h.id)));
+    await store.assetsStore.remove(id);
+    setAssetHistory((prev) => prev.filter((h) => h.asset_id !== id));
+    setAssets((prev) => prev.filter((a) => a.id !== id));
+    notify('Veículo excluído', 'success');
+  }
+
   async function addAssetHistoryEntry({ assetId, itemId, partName, quantity, date, notes }) {
     if (itemId) {
       const item = items.find((i) => i.id === itemId);
@@ -144,8 +179,11 @@ export function DataProvider({ children }) {
         removeStock,
         registerInvoice,
         addTeam,
+        renameTeam,
+        removeTeam,
         addAsset,
         updateAsset,
+        removeAsset,
         addAssetHistoryEntry,
         refreshAll,
       }}
