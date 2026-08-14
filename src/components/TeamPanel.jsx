@@ -34,7 +34,7 @@ export default function TeamPanel({
 
   async function commitRename() {
     const name = draftName.trim();
-    if (name && name !== team.name) await onRename(team.id, name);
+    if (name && name !== team.name) await onRename(team.id, { name });
     setRenaming(false);
   }
 
@@ -59,7 +59,7 @@ export default function TeamPanel({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 8 }}
             transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-            className="surface relative flex max-h-[88vh] w-full max-w-[880px] flex-col overflow-hidden rounded-[20px]"
+            className="card relative flex max-h-[88vh] w-full max-w-[880px] flex-col overflow-hidden"
             style={{ boxShadow: 'var(--shadow-modal)' }}
           >
             {/* Header */}
@@ -161,7 +161,7 @@ export default function TeamPanel({
                         ))}
                       </div>
                     )}
-                    <div className="surface row-divide overflow-hidden rounded-[14px]">
+                    <div className="card row-divide overflow-hidden">
                       {assets.map((a) => (
                         <button
                           key={a.id}
@@ -183,7 +183,7 @@ export default function TeamPanel({
               ) : items.length === 0 ? (
                 <Empty icon={<Package size={26} strokeWidth={1.5} />} text="Nenhum item de estoque nesta equipe" />
               ) : (
-                <div className="surface row-divide overflow-hidden rounded-[14px]">
+                <div className="card row-divide overflow-hidden">
                   {items.map((i) => (
                     <div key={i.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
                       <div className="min-w-0">

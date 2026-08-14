@@ -47,6 +47,79 @@ export function exportInventoryPDF(items) {
   doc.save(`estoque_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
+const KIND_LABEL = {
+  entrada: 'Entrada', saida: 'Saída', transferencia: 'Transferência',
+  manutencao: 'Manutenção', troca_peca: 'Troca de peça',
+  cadastro: 'Cadastro', edicao: 'Edição', exclusao: 'Exclusão',
+};
+
+export function exportMovementsPDF(movements) {
+  const doc = new jsPDF({ orientation: 'landscape' });
+
+  doc.setFontSize(18);
+  doc.setTextColor(...INK);
+  doc.setFont(undefined, 'bold');
+  doc.text(BRAND, 14, 18);
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(11);
+  doc.setTextColor(...MUTED);
+  doc.text('Histórico de Movimentações', 14, 25);
+  doc.setFontSize(9);
+  doc.text(`${movements.length} registro(s) · gerado em ${fmtDateTime()}`, 14, 31);
+
+  autoTable(doc, {
+    startY: 37,
+    head: [['Data', 'Tipo', 'Registro', 'Descrição', 'Qtd', 'Equipe', 'Usuário']],
+    body: movements.map((m) => [
+      fmtDateTime(m.created_at),
+      KIND_LABEL[m.kind] || m.kind,
+      m.entity_name,
+      m.description,
+      m.quantity ?? '—',
+      m.team_name || 'Geral',
+      m.user_name || '—',
+    ]),
+    styles: { fontSize: 8.5, cellPadding: 4 },
+    headStyles: { fillColor: ACCENT, textColor: 255 },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+    columnStyles: { 3: { cellWidth: 90 } },
+  });
+
+  doc.save(`historico_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+export function exportEquipmentPDF(assets, { teamName = () => '—', locationName = () => '—' } = {}) {
+  const doc = new jsPDF({ orientation: 'landscape' });
+
+  doc.setFontSize(18);
+  doc.setTextColor(...INK);
+  doc.setFont(undefined, 'bold');
+  doc.text(BRAND, 14, 18);
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(11);
+  doc.setTextColor(...MUTED);
+  doc.text('Relatório de Equipamentos', 14, 25);
+  doc.setFontSize(9);
+  doc.text(`${assets.length} equipamento(s) · gerado em ${fmtDateTime()}`, 14, 31);
+
+  autoTable(doc, {
+    startY: 37,
+    head: [['Nome', 'Tipo', 'Modelo', 'Ano', 'Placa', 'VIN', 'Equipe', 'Supervisor', 'Status', 'Local']],
+    body: assets.map((a) => [
+      a.name, a.tipo || '—', a.model || '—', a.year || '—', a.plate || '—',
+      a.vin || '—', teamName(a.team_id), a.supervisor || '—',
+      KIND_STATUS[a.status || 'disponivel'] || '—', locationName(a.location_id),
+    ]),
+    styles: { fontSize: 8, cellPadding: 3.5 },
+    headStyles: { fillColor: ACCENT, textColor: 255 },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+  });
+
+  doc.save(`equipamentos_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+const KIND_STATUS = { disponivel: 'Disponível', em_uso: 'Em uso', manutencao: 'Manutenção' };
+
 export function exportInvoicePDF(invoice) {
   const doc = new jsPDF();
 

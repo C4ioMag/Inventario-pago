@@ -1,111 +1,85 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronRight, Plus, UsersRound, Warehouse } from 'lucide-react';
+import { ChevronRight, Plus, Users, Warehouse } from 'lucide-react';
 import { useData } from '../context/DataContext';
+import PageHeader from '../components/PageHeader';
 import CreateTeamModal from '../components/CreateTeamModal';
 import AssetFormModal from '../components/AssetFormModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import TeamPanel from '../components/TeamPanel';
-import AssetsTable from '../components/AssetsTable';
+import { fmtUSD } from '../lib/format';
 
 const UNASSIGNED = { id: null, name: 'Sem equipe' };
 
 export default function Teams() {
   const navigate = useNavigate();
   const {
-    teams, assets, items, loading,
-    addTeam, renameTeam, removeTeam, addAsset, updateAsset,
+    teams, assets, items, registries, loading,
+    addTeam, renameTeam, removeTeam, addAsset,
   } = useData();
 
-  const [tab, setTab] = useState('teams');
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
   const [panelTeam, setPanelTeam] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const [assetForm, setAssetForm] = useState(null); // { asset?, defaultTeamId }
+  const [assetForm, setAssetForm] = useState(null);
 
-  const assetsByTeam = useMemo(() => {
-    const map = new Map();
-    for (const a of assets) {
-      const key = a.team_id || '__none__';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(a);
-    }
-    return map;
-  }, [assets]);
-
-  const itemsByTeam = useMemo(() => {
-    const map = new Map();
-    for (const i of items) {
-      const key = i.team_id || '__none__';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(i);
-    }
-    return map;
-  }, [items]);
+  const assetsByTeam = useMemo(() => groupBy(assets, (a) => a.team_id || '__none__'), [assets]);
+  const itemsByTeam = useMemo(() => groupBy(items, (i) => i.team_id || '__none__'), [items]);
 
   const panelKey = panelTeam ? panelTeam.id || '__none__' : null;
 
+  function stockValue(key) {
+    return (itemsByTeam.get(key) || []).reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
+  }
+
   return (
     <div>
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[26px] font-bold" style={{ color: 'var(--text)', letterSpacing: '-0.02em' }}>Equipamentos</h1>
-          <p className="mt-1 text-[14px]" style={{ color: 'var(--text-secondary)' }}>
-            {teams.length} equipe{teams.length !== 1 ? 's' : ''} · {assets.length} asset{assets.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {tab === 'teams' ? (
-            <button onClick={() => setCreateTeamOpen(true)} className="btn-primary flex items-center gap-2 px-4 py-2.5 text-[13px]">
-              <UsersRound size={15} /> Nova equipe
-            </button>
-          ) : (
-            <button onClick={() => setAssetForm({ defaultTeamId: '' })} className="btn-primary flex items-center gap-2 px-4 py-2.5 text-[13px]">
-              <Plus size={15} /> Novo asset
-            </button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title="Equipes"
+        subtitle={`${teams.length} equipe(s) · ${assets.length} equipamento(s) distribuído(s)`}
+      >
+        <button onClick={() => setCreateTeamOpen(true)} className="btn-primary flex items-center gap-2 px-3.5 py-2 text-[13px]">
+          <Plus size={15} /> Nova equipe
+        </button>
+      </PageHeader>
 
-      <div className="mb-6 inline-flex gap-1 rounded-full p-1" style={{ background: 'var(--bg-secondary)' }}>
-        <SubTab active={tab === 'teams'} onClick={() => setTab('teams')}>Equipes</SubTab>
-        <SubTab active={tab === 'assets'} onClick={() => setTab('assets')}>Todos os assets</SubTab>
-      </div>
-
-      {tab === 'teams' ? (
-        loading ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-[92px] rounded-[16px]" />)}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <TeamTile
-              label="Sem equipe"
-              sub="Pátio · não atribuído"
-              count={(assetsByTeam.get('__none__') || []).length}
-              onClick={() => setPanelTeam(UNASSIGNED)}
-              icon={<Warehouse size={16} />}
-            />
-            {teams.map((t, idx) => (
-              <TeamTile
-                key={t.id}
-                label={t.name}
-                sub={`${(itemsByTeam.get(t.id) || []).length} item(ns) de estoque`}
-                count={(assetsByTeam.get(t.id) || []).length}
-                onClick={() => setPanelTeam(t)}
-                delay={idx * 0.03}
-              />
-            ))}
-          </div>
-        )
+      {loading ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-[112px]" />)}
+        </div>
       ) : (
-        <AssetsTable
-          assets={assets}
-          teams={teams}
-          onOpen={(a) => navigate(`/equipamentos/asset/${a.id}`)}
-          onEdit={(a) => setAssetForm({ asset: a })}
-        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <TeamTile
+            label="Sem equipe"
+            sub="Pátio · não atribuído"
+            assetsCount={(assetsByTeam.get('__none__') || []).length}
+            itemsCount={(itemsByTeam.get('__none__') || []).length}
+            value={stockValue('__none__')}
+            icon={<Warehouse size={15} />}
+            onClick={() => setPanelTeam(UNASSIGNED)}
+          />
+          {teams.map((t, idx) => (
+            <TeamTile
+              key={t.id}
+              label={t.name}
+              sub={t.supervisor ? `Supervisor · ${t.supervisor}` : 'Equipe'}
+              assetsCount={(assetsByTeam.get(t.id) || []).length}
+              itemsCount={(itemsByTeam.get(t.id) || []).length}
+              value={stockValue(t.id)}
+              onClick={() => setPanelTeam(t)}
+              delay={idx * 0.03}
+            />
+          ))}
+          <button
+            onClick={() => setCreateTeamOpen(true)}
+            className="row-hover flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed"
+            style={{ borderColor: 'var(--border-strong)', color: 'var(--text-secondary)' }}
+          >
+            <Users size={20} strokeWidth={1.7} />
+            <span className="text-[13px] font-medium">Criar nova equipe</span>
+          </button>
+        </div>
       )}
 
       <CreateTeamModal open={createTeamOpen} onClose={() => setCreateTeamOpen(false)} onSubmit={addTeam} />
@@ -126,7 +100,7 @@ export default function Teams() {
         open={Boolean(confirmDelete)}
         onClose={() => setConfirmDelete(null)}
         title={`Excluir "${confirmDelete?.name}"?`}
-        message="Os veículos e itens de estoque desta equipe não serão apagados — eles voltam para “Sem equipe”."
+        message="Os equipamentos e itens desta equipe não serão apagados — eles voltam para “Sem equipe”."
         confirmLabel="Excluir equipe"
         onConfirm={async () => {
           await removeTeam(confirmDelete.id);
@@ -136,52 +110,60 @@ export default function Teams() {
 
       <AssetFormModal
         open={Boolean(assetForm)}
-        asset={assetForm?.asset}
         defaultTeamId={assetForm?.defaultTeamId}
         teams={teams}
+        registries={registries}
         onClose={() => setAssetForm(null)}
-        onSubmit={(fields) => (assetForm?.asset ? updateAsset(assetForm.asset.id, fields) : addAsset(fields))}
+        onSubmit={(fields) => addAsset(fields)}
       />
     </div>
   );
 }
 
-function SubTab({ active, onClick, children }) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors"
-      style={{
-        background: active ? 'var(--bg-elevated)' : 'transparent',
-        color: active ? 'var(--text)' : 'var(--text-secondary)',
-        boxShadow: active ? 'var(--shadow-xs)' : 'none',
-      }}
-    >
-      {children}
-    </button>
-  );
+function groupBy(rows, keyOf) {
+  const map = new Map();
+  for (const r of rows) {
+    const k = keyOf(r);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(r);
+  }
+  return map;
 }
 
-function TeamTile({ label, sub, count, onClick, icon, delay = 0 }) {
+function TeamTile({ label, sub, assetsCount, itemsCount, value, onClick, icon, delay = 0 }) {
   return (
     <motion.button
       onClick={onClick}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay }}
-      className="row-hover surface flex items-center justify-between rounded-[16px] p-5 text-left"
+      className="card row-hover p-5 text-left"
     >
-      <div className="min-w-0">
-        <p className="truncate text-[15px] font-semibold" style={{ color: 'var(--text)' }}>{label}</p>
-        <p className="mt-0.5 truncate text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>{sub}</p>
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <div className="text-right">
-          <p className="text-[22px] font-bold leading-none tabular-nums" style={{ color: 'var(--text)' }}>{count}</p>
-          <p className="label-caps mt-1">veículos</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-semibold" style={{ color: 'var(--text)' }}>{label}</p>
+          <p className="mt-0.5 truncate text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>{sub}</p>
         </div>
         <span style={{ color: 'var(--text-tertiary)' }}>{icon || <ChevronRight size={16} />}</span>
       </div>
+
+      <div className="mt-4 flex items-end gap-5">
+        <Metric value={assetsCount} label="equipamentos" />
+        <Metric value={itemsCount} label="itens" />
+        <div className="ml-auto text-right">
+          <p className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--text)' }}>{fmtUSD(value)}</p>
+          <p className="label-caps mt-0.5">em estoque</p>
+        </div>
+      </div>
     </motion.button>
+  );
+}
+
+function Metric({ value, label }) {
+  return (
+    <div>
+      <p className="text-[21px] font-bold leading-none tabular-nums" style={{ color: 'var(--text)' }}>{value}</p>
+      <p className="label-caps mt-1">{label}</p>
+    </div>
   );
 }

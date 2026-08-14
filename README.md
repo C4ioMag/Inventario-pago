@@ -1,18 +1,28 @@
-# Estoque
+# Inventário
 
-Sistema de controle de estoque, equipes e frota (Power Connect USA).
+Sistema de controle de inventário, equipes e frota (Power Connect USA).
 
-- **Equipamentos**: crie equipes, adicione veículos/máquinas a cada uma (nome, tipo, modelo,
-  ano, placa, VIN, supervisor, proprietário, Verizon/Bouncie/Samsung/E-ZPass, observações) e
-  edite para redirecionar um asset para outra equipe
-- **Histórico por veículo**: registre peças trocadas com data — opcionalmente descontando
-  direto do estoque da equipe
-- **Estoque**: por equipe (ou geral), adicionar itens, acrescentar/retirar quantidade
-- Ao retirar, opção de gerar invoice (máquina + VIN) em PDF para cobrança
-- Exportar o estoque completo em PDF
-- Histórico de invoices, com re-download
-- Modo claro/escuro
-- Login único, protegido por senha
+**Visão Geral** — painel com totais de itens, equipamentos, equipes e movimentações do mês
+(com sparklines de dados reais), inventário resumido e movimentações recentes.
+
+**Inventário**
+- *Itens*: tabela com categoria, equipe, quantidade, preço e status (disponível, estoque baixo,
+  sem estoque, manutenção). Entradas e saídas em um clique; ao retirar, oferece gerar invoice
+  (máquina + VIN) em PDF para cobrança.
+- *Equipamentos*: frota completa com tipo, modelo, ano, placa, VIN, equipe, supervisor,
+  proprietário, status, local, marca, categoria, observações e Verizon/Bouncie/Samsung/E-ZPass.
+  Cada equipamento tem página própria com histórico de peças trocadas e suas movimentações.
+- *Equipes*: agrupam equipamentos e estoque. Clicar abre um painel com tudo sob a
+  responsabilidade da equipe. Dá para renomear e excluir (nada é perdido: volta para "Sem equipe").
+
+**Cadastros** — categorias, fornecedores, marcas e locais, com contagem de uso.
+
+**Relatórios e Histórico**
+- Histórico registra automaticamente toda entrada, saída, transferência, troca de peça,
+  mudança de status, cadastro e exclusão — com data, quantidade, equipe e usuário.
+- Exportação em PDF de itens, equipamentos e do histórico completo.
+
+Também: busca global, alertas de estoque baixo, modo claro/escuro e login protegido por senha.
 
 ## Rodando localmente
 
@@ -29,6 +39,7 @@ Para os dados ficarem salvos permanentemente (e acessíveis de qualquer computad
 
 1. Crie uma conta em [supabase.com](https://supabase.com) e um novo projeto.
 2. Em **SQL Editor**, rode o conteúdo do arquivo [`supabase-setup.sql`](./supabase-setup.sql) deste repositório.
+   Rode de novo sempre que o schema mudar — o script é seguro para repetir e só cria o que falta.
 3. Em **Project Settings → API**, copie a **Project URL** e a **anon public key**.
 4. Localmente: crie um arquivo `.env` (baseado em `.env.example`) com:
    ```

@@ -22,7 +22,7 @@ export default function Modal({ open, onClose, title, subtitle, children, maxWid
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: 'spring', stiffness: 340, damping: 30 }}
-            className="surface relative w-full rounded-[18px] p-6"
+            className="card relative w-full p-6"
             style={{ maxWidth, boxShadow: 'var(--shadow-modal)' }}
           >
             <button

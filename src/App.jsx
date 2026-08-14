@@ -6,10 +6,16 @@ import { DataProvider } from './context/DataContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Invoices from './pages/Invoices';
-import Teams from './pages/Teams';
+import Overview from './pages/Overview';
+import Items from './pages/Items';
+import Equipment from './pages/Equipment';
 import AssetDetail from './pages/AssetDetail';
+import Teams from './pages/Teams';
+import Registry from './pages/Registry';
+import Reports from './pages/Reports';
+import History from './pages/History';
+import Invoices from './pages/Invoices';
+import Settings from './pages/Settings';
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
@@ -26,10 +32,16 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/equipamentos" element={<Teams />} />
+        <Route path="/" element={<Overview />} />
+        <Route path="/itens" element={<Items />} />
+        <Route path="/equipamentos" element={<Equipment />} />
         <Route path="/equipamentos/asset/:assetId" element={<AssetDetail />} />
+        <Route path="/equipes" element={<Teams />} />
+        <Route path="/cadastros/:kind" element={<Registry />} />
+        <Route path="/relatorios" element={<Reports />} />
+        <Route path="/historico" element={<History />} />
         <Route path="/invoices" element={<Invoices />} />
+        <Route path="/configuracoes" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
