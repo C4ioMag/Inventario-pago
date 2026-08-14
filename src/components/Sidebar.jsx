@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import {
-  ClipboardList, Cog, FileBarChart, History,
+  ClipboardList, Cog, FileBarChart, FolderOpen, History,
   LayoutGrid, Package, Tags, Truck, Users,
 } from 'lucide-react';
 
@@ -21,6 +21,7 @@ const GROUPS = [
     items: [
       { to: '/relatorios', label: 'Relatórios', icon: FileBarChart },
       { to: '/historico', label: 'Histórico', icon: History },
+      { to: '/documentos', label: 'Documentos', icon: FolderOpen },
       { to: '/categorias', label: 'Categorias', icon: Tags },
     ],
   },

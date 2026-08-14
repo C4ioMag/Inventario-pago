@@ -14,6 +14,7 @@ export function DataProvider({ children }) {
   const [assetHistory, setAssetHistory] = useState([]);
   const [movements, setMovements] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const { notify } = useToast();
   const { user } = useAuth();
@@ -22,7 +23,7 @@ export function DataProvider({ children }) {
   const refreshAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [itemsData, invoicesData, teamsData, assetsData, historyData, movementsData, categoriesData] =
+      const [itemsData, invoicesData, teamsData, assetsData, historyData, movementsData, categoriesData, documentsData] =
         await Promise.all([
           store.listItems(),
           store.listInvoices(),
@@ -31,6 +32,7 @@ export function DataProvider({ children }) {
           store.assetHistoryStore.list(),
           store.movementsStore.list(),
           store.categoriesStore.list(),
+          store.documentsStore.list(),
         ]);
       setItems(itemsData);
       setInvoices(invoicesData);
@@ -39,6 +41,7 @@ export function DataProvider({ children }) {
       setAssetHistory(historyData);
       setMovements(movementsData);
       setCategories(categoriesData);
+      setDocuments(documentsData);
     } catch (err) {
       notify(err.message || 'Erro ao carregar dados', 'error');
     } finally {
@@ -144,16 +147,6 @@ export function DataProvider({ children }) {
   async function addItem(fields) {
     const row = await store.createItem(fields);
     setItems((prev) => [...prev, row]);
-    await logMovement({
-      kind: 'cadastro',
-      entity_type: 'item',
-      entity_id: row.id,
-      entity_name: row.name,
-      quantity: row.quantity,
-      description: `Item cadastrado com ${row.quantity} unidade(s)`,
-      team_id: row.team_id,
-      team_name: teamNameOf(row.team_id),
-    });
     notify(`"${row.name}" adicionado ao estoque`, 'success');
     return row;
   }
@@ -239,7 +232,7 @@ export function DataProvider({ children }) {
    * Move uma quantidade de um item entre equipes/yard.
    * Se o destino já tem um item com o mesmo nome, soma nele; senão cria lá.
    */
-  async function transferItem({ itemId, quantity, toTeamId }) {
+  async function transferItem({ itemId, quantity, toTeamId, notes }) {
     const source = items.find((i) => i.id === itemId);
     if (!source) return;
     const toId = toTeamId || null;
@@ -291,6 +284,7 @@ export function DataProvider({ children }) {
       description: `${qty} un. de ${source.name}: ${from} → ${to}`,
       from_value: from,
       to_value: to,
+      notes: notes?.trim() || null,
       team_id: toId,
       team_name: teamNameOf(toId),
     });
@@ -298,7 +292,7 @@ export function DataProvider({ children }) {
   }
 
   /** Move um equipamento inteiro para outra equipe/yard. */
-  async function transferAsset({ assetId, toTeamId }) {
+  async function transferAsset({ assetId, toTeamId, notes }) {
     const asset = assets.find((a) => a.id === assetId);
     if (!asset) return;
     const toId = toTeamId || null;
@@ -318,6 +312,7 @@ export function DataProvider({ children }) {
       description: `${asset.name}: ${from} → ${to}`,
       from_value: from,
       to_value: to,
+      notes: notes?.trim() || null,
       team_id: toId,
       team_name: teamNameOf(toId),
     });
@@ -346,15 +341,6 @@ export function DataProvider({ children }) {
   async function addAsset(fields, initialMaintenance = []) {
     const row = await store.assetsStore.create(fields);
     setAssets((prev) => [...prev, row]);
-    await logMovement({
-      kind: 'cadastro',
-      entity_type: 'asset',
-      entity_id: row.id,
-      entity_name: row.name,
-      description: `${row.tipo || 'Equipamento'} cadastrado`,
-      team_id: row.team_id,
-      team_name: teamNameOf(row.team_id),
-    });
 
     // `assets` ainda não tem o novo registro neste render — passamos o objeto direto
     for (const entry of initialMaintenance) {
@@ -384,13 +370,13 @@ export function DataProvider({ children }) {
           team_name: teamNameOf(updated.team_id),
         });
       }
-      if (patch.status !== undefined && patch.status !== before.status) {
+      if (patch.status !== undefined && patch.status === 'manutencao' && before.status !== 'manutencao') {
         await logMovement({
-          kind: patch.status === 'manutencao' ? 'manutencao' : 'edicao',
+          kind: 'manutencao',
           entity_type: 'asset',
           entity_id: id,
           entity_name: updated.name,
-          description: `Status alterado de ${before.status} para ${updated.status}`,
+          description: `${updated.name} entrou em manutenção`,
           from_value: before.status,
           to_value: updated.status,
           team_id: updated.team_id,
@@ -429,7 +415,8 @@ export function DataProvider({ children }) {
    */
   async function addAssetHistoryEntry({
     assetId, itemId, partName, quantity, date, notes,
-    type = 'peca', odometer = null, cost = null, silent = false, asset: assetOverride = null,
+    type = 'peca', odometer = null, cost = null, details = null,
+    silent = false, asset: assetOverride = null,
   }) {
     const asset = assetOverride || assets.find((a) => a.id === assetId);
 
@@ -450,6 +437,7 @@ export function DataProvider({ children }) {
       quantity: quantity || 1,
       odometer: odometer === '' || odometer === null ? null : Number(odometer),
       cost: cost === '' || cost === null ? null : Number(cost),
+      details: details && Object.keys(details).length ? details : null,
       date,
       notes: notes || null,
     });
@@ -487,6 +475,100 @@ export function DataProvider({ children }) {
     return row;
   }
 
+  // ---------- Documentos ----------
+
+  async function addDocument({ name, mime, size, data, assetId = null, teamId = null, notes = null }) {
+    const row = await store.documentsStore.create({
+      name, mime, size, data,
+      asset_id: assetId, team_id: teamId, notes,
+    });
+    setDocuments((prev) => [row, ...prev]);
+    notify(`"${name}" enviado`, 'success');
+    return row;
+  }
+
+  async function removeDocument(id) {
+    await store.documentsStore.remove(id);
+    setDocuments((prev) => prev.filter((d) => d.id !== id));
+    notify('Documento excluído', 'success');
+  }
+
+  /** Observação livre numa movimentação já registrada (ex.: motivo da transferência). */
+  async function updateMovementNotes(id, notes) {
+    const updated = await store.movementsStore.update(id, { notes: notes?.trim() || null });
+    setMovements((prev) => prev.map((m) => (m.id === id ? updated : m)));
+    notify('Observação salva', 'success');
+    return updated;
+  }
+
+  /**
+   * Importa equipamentos em lote (planilha), pulando os que já existem pelo nome.
+   * Categorias da planilha (ex.: "COMPRESSOR") são casadas com as já cadastradas
+   * ("Compressor") sem diferenciar maiúsculas; as novas viram categoria de verdade.
+   */
+  async function importAssets(rows) {
+    const existing = new Set(assets.map((a) => (a.name || '').trim().toLowerCase()));
+    const byLower = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c.name]));
+    const newCategories = [];
+    const created = [];
+
+    for (const r of rows) {
+      const name = (r.name || '').trim();
+      if (!name || existing.has(name.toLowerCase())) continue;
+      existing.add(name.toLowerCase());
+
+      let tipo = (r.tipo || '').trim() || null;
+      if (tipo) {
+        const key = tipo.toLowerCase();
+        if (byLower.has(key)) {
+          tipo = byLower.get(key);
+        } else {
+          const pretty = tipo.replace(/\S+/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase());
+          byLower.set(key, pretty);
+          newCategories.push(await store.categoriesStore.create({ name: pretty, kind: 'asset' }));
+          tipo = pretty;
+        }
+      }
+      created.push(await store.assetsStore.create({ ...r, name, tipo }));
+    }
+
+    if (newCategories.length) setCategories((prev) => [...prev, ...newCategories]);
+    if (created.length) setAssets((prev) => [...prev, ...created]);
+    return created;
+  }
+
+  /** Importa itens de estoque em lote (planilha), somando quando o item já existe na equipe. */
+  async function importItems(rows) {
+    const created = [];
+    const updated = [];
+    let pool = [...items];
+    for (const r of rows) {
+      const name = (r.name || '').trim();
+      if (!name) continue;
+      const teamId = r.teamId || null;
+      const match = pool.find(
+        (i) => i.name.trim().toLowerCase() === name.toLowerCase() && (i.team_id || null) === teamId
+      );
+      if (match) {
+        const row = await store.updateItemQuantity(match.id, Number(match.quantity) + Number(r.quantity || 0));
+        pool = pool.map((i) => (i.id === row.id ? row : i));
+        updated.push(row);
+      } else {
+        const row = await store.createItem({
+          name,
+          quantity: Number(r.quantity) || 0,
+          unitPrice: Number(r.unitPrice) || 0,
+          minQuantity: Number(r.minQuantity) || 0,
+          teamId,
+        });
+        pool = [...pool, row];
+        created.push(row);
+      }
+    }
+    setItems(pool);
+    return { created, updated };
+  }
+
   return (
     <DataContext.Provider
       value={{
@@ -497,6 +579,7 @@ export function DataProvider({ children }) {
         assetHistory,
         movements,
         categories,
+        documents,
         loading,
         dbConnected: supabaseReady,
         addItem,
@@ -518,6 +601,11 @@ export function DataProvider({ children }) {
         updateAsset,
         removeAsset,
         addAssetHistoryEntry,
+        addDocument,
+        removeDocument,
+        updateMovementNotes,
+        importAssets,
+        importItems,
         refreshAll,
       }}
     >

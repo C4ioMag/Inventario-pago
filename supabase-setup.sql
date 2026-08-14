@@ -84,16 +84,17 @@ alter table assets add column if not exists oil_interval numeric;
 alter table assets add column if not exists last_oil_odometer numeric;
 alter table assets add column if not exists last_oil_date text;
 
--- HISTÓRICO DE MANUTENÇÃO POR EQUIPAMENTO (peças, óleo, revisão)
+-- HISTÓRICO DE MANUTENÇÃO POR EQUIPAMENTO (peças, óleo, pneus, revisão)
 create table if not exists asset_parts_history (
   id text primary key,
   asset_id text not null references assets(id) on delete cascade,
   item_id text references items(id) on delete set null,
-  type text not null default 'peca',   -- 'peca' | 'oleo' | 'manutencao' | 'revisao' | 'pneu'
+  type text not null default 'peca',   -- 'oleo' | 'pneu' | 'peca' | 'revisao' | 'outro'
   part_name text not null,
   quantity numeric not null default 1,
   odometer numeric,
   cost numeric,
+  details jsonb,                       -- campos específicos de cada tipo
   date text not null,
   notes text,
   created_at timestamptz default now()
@@ -101,6 +102,7 @@ create table if not exists asset_parts_history (
 alter table asset_parts_history add column if not exists type text not null default 'peca';
 alter table asset_parts_history add column if not exists odometer numeric;
 alter table asset_parts_history add column if not exists cost numeric;
+alter table asset_parts_history add column if not exists details jsonb;
 
 -- MOVIMENTAÇÕES — trilha de tudo que entra, sai ou muda de equipe
 create table if not exists movements (
@@ -115,11 +117,27 @@ create table if not exists movements (
   team_name text,
   from_value text,
   to_value text,
+  notes text,
   user_name text,
   created_at timestamptz default now()
 );
+alter table movements add column if not exists notes text;
 create index if not exists movements_created_at_idx on movements (created_at desc);
 create index if not exists movements_entity_idx on movements (entity_type, entity_id);
+
+-- DOCUMENTOS (PDFs, planilhas e fotos anexados ao sistema)
+create table if not exists documents (
+  id text primary key,
+  name text not null,
+  mime text,
+  size numeric,
+  data text,                    -- conteúdo em base64 (data URL)
+  asset_id text references assets(id) on delete cascade,
+  team_id text references teams(id) on delete set null,
+  notes text,
+  created_at timestamptz default now()
+);
+create index if not exists documents_asset_idx on documents (asset_id);
 
 -- App interno, usuário único autenticado no próprio app (sem Supabase Auth) — RLS desabilitado
 alter table teams                disable row level security;
@@ -129,3 +147,4 @@ alter table invoices             disable row level security;
 alter table assets               disable row level security;
 alter table asset_parts_history  disable row level security;
 alter table movements            disable row level security;
+alter table documents            disable row level security;

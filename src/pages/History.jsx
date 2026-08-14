@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
-import { ArrowLeftRight, Download, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeftRight, Download, MessageSquarePlus, Search } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
+import Modal from '../components/Modal';
 import { MOVEMENT_KINDS, movementKind } from '../lib/movements';
 import { exportMovementsPDF } from '../lib/pdf';
 import { fmtDateTime } from '../lib/format';
@@ -10,12 +11,13 @@ import { fmtDateTime } from '../lib/format';
 const PAGE = 40;
 
 export default function History() {
-  const { movements, teams, loading } = useData();
+  const { movements, teams, loading, updateMovementNotes } = useData();
   const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState('all');
+  const [kindFilter, setKindFilter] = useState('transferencia');
   const [teamFilter, setTeamFilter] = useState('all');
   const [entityFilter, setEntityFilter] = useState('all');
   const [visible, setVisible] = useState(PAGE);
+  const [noteFor, setNoteFor] = useState(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -27,7 +29,7 @@ export default function History() {
         if (key !== teamFilter) return false;
       }
       if (!q) return true;
-      return [m.entity_name, m.description, m.team_name, m.user_name]
+      return [m.entity_name, m.description, m.notes, m.team_name, m.user_name]
         .filter(Boolean).some((v) => String(v).toLowerCase().includes(q));
     });
   }, [movements, search, kindFilter, teamFilter, entityFilter]);
@@ -36,7 +38,7 @@ export default function History() {
     <div>
       <PageHeader
         title="Histórico"
-        subtitle="Toda entrada, saída, transferência e troca de peça fica registrada aqui"
+        subtitle="Transferências e movimentações, com o motivo de cada uma"
       >
         <button
           onClick={() => exportMovementsPDF(filtered)}
@@ -53,13 +55,16 @@ export default function History() {
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setVisible(PAGE); }}
-            placeholder="Buscar por equipamento, item ou descrição…"
+            placeholder="Buscar por equipamento, item, motivo…"
             className="input-apple pl-9"
           />
         </div>
-        <select value={kindFilter} onChange={(e) => { setKindFilter(e.target.value); setVisible(PAGE); }} className="input-apple w-auto min-w-[150px]">
-          <option value="all">Todos os tipos</option>
-          {Object.entries(MOVEMENT_KINDS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        <select value={kindFilter} onChange={(e) => { setKindFilter(e.target.value); setVisible(PAGE); }} className="input-apple w-auto min-w-[160px]">
+          <option value="transferencia">Só transferências</option>
+          <option value="all">Todas as movimentações</option>
+          {Object.entries(MOVEMENT_KINDS)
+            .filter(([k]) => k !== 'transferencia')
+            .map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
         <select value={entityFilter} onChange={(e) => { setEntityFilter(e.target.value); setVisible(PAGE); }} className="input-apple w-auto min-w-[140px]">
           <option value="all">Itens e equipamentos</option>
@@ -83,7 +88,7 @@ export default function History() {
             icon={ArrowLeftRight}
             title={movements.length === 0 ? 'Nenhuma movimentação ainda' : 'Nenhum resultado para esse filtro'}
             hint={movements.length === 0
-              ? 'Assim que você registrar entradas, saídas ou trocas de peça, tudo aparece aqui com data e responsável.'
+              ? 'Assim que você transferir itens ou equipamentos, tudo aparece aqui com data, motivo e responsável.'
               : undefined}
           />
         ) : (
@@ -92,8 +97,8 @@ export default function History() {
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Data</th><th>Tipo</th><th>Registro</th><th>Descrição</th>
-                    <th className="!text-right">Qtd</th><th>Equipe</th><th>Usuário</th>
+                    <th>Data</th><th>Tipo</th><th>Registro</th><th>Movimentação</th>
+                    <th className="!text-right">Qtd</th><th>Observação</th><th>Usuário</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -113,7 +118,16 @@ export default function History() {
                         <td className="text-right tabular-nums" style={{ color: 'var(--text)' }}>
                           {m.quantity ?? '—'}
                         </td>
-                        <td>{m.team_name || 'Yard'}</td>
+                        <td>
+                          <button
+                            onClick={() => setNoteFor(m)}
+                            className="flex items-center gap-1.5 text-left transition-colors hover:underline"
+                            style={{ color: m.notes ? 'var(--text)' : 'var(--text-tertiary)' }}
+                            title={m.notes ? 'Editar observação' : 'Adicionar observação'}
+                          >
+                            {m.notes || <><MessageSquarePlus size={13} /> Adicionar</>}
+                          </button>
+                        </td>
                         <td>{m.user_name || '—'}</td>
                       </tr>
                     );
@@ -133,6 +147,51 @@ export default function History() {
           </>
         )}
       </div>
+
+      <NoteModal
+        open={Boolean(noteFor)}
+        movement={noteFor}
+        onClose={() => setNoteFor(null)}
+        onSubmit={(notes) => updateMovementNotes(noteFor.id, notes)}
+      />
     </div>
+  );
+}
+
+function NoteModal({ open, movement, onClose, onSubmit }) {
+  const [text, setText] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { if (open) setText(movement?.notes || ''); }, [open, movement]);
+
+  if (!movement) return null;
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await onSubmit(text);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Observação" subtitle={movement.description} maxWidth={440}>
+      <form onSubmit={handleSubmit} className="space-y-3.5">
+        <textarea
+          autoFocus
+          rows={3}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Ex: veio para o Yard Apopka pois estava quebrada"
+          className="input-apple resize-none"
+        />
+        <button type="submit" disabled={saving} className="btn-primary w-full py-2.5 text-[14px]">
+          {saving ? 'Salvando…' : 'Salvar observação'}
+        </button>
+      </form>
+    </Modal>
   );
 }

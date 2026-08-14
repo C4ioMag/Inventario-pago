@@ -35,7 +35,10 @@ export default function Layout() {
       ...assets.filter((a) => hit(a.name) || hit(a.plate) || hit(a.vin) || hit(a.model)).slice(0, 4)
         .map((a) => ({ id: a.id, label: a.name, sub: `${a.tipo || 'Equipamento'}${a.plate ? ` · ${a.plate}` : ''}`, to: `/equipamentos/asset/${a.id}` })),
       ...teams.filter((t) => hit(t.name)).slice(0, 3)
-        .map((t) => ({ id: t.id, label: t.name, sub: 'Equipe', to: '/equipes' })),
+        .map((t) => ({ id: t.id, label: t.name, sub: 'Equipe', to: `/equipes?team=${t.id}` })),
+      ...('yard'.includes(q) || 'geral'.includes(q)
+        ? [{ id: 'yard', label: 'Yard', sub: 'Equipe', to: '/equipes?team=yard' }]
+        : []),
     ];
   }, [query, items, assets, teams]);
 

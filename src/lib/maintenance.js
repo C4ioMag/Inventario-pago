@@ -1,13 +1,93 @@
+/**
+ * Cada tipo de manutenção pede campos diferentes.
+ * `fields` descreve os inputs específicos que o formulário monta.
+ */
 export const MAINTENANCE_TYPES = {
-  oleo: { label: 'Troca de óleo', color: 'var(--warn)' },
-  peca: { label: 'Troca de peça', color: 'var(--violet)' },
-  manutencao: { label: 'Manutenção', color: 'var(--info)' },
-  revisao: { label: 'Revisão', color: 'var(--ok)' },
-  pneu: { label: 'Pneu', color: 'var(--text-secondary)' },
+  oleo: {
+    label: 'Troca de óleo',
+    color: 'var(--warn)',
+    defaultName: 'Troca de óleo',
+    requiresOdometer: true,
+    fields: [
+      { key: 'oil_type', label: 'Tipo de óleo', placeholder: 'Ex: 15W40 sintético' },
+      { key: 'oil_qty', label: 'Litros / quartos', type: 'number', step: '0.1', placeholder: 'Ex: 12' },
+      { key: 'oil_filter', label: 'Filtro de óleo', placeholder: 'Marca / código' },
+      { key: 'fuel_filter', label: 'Filtro de combustível', placeholder: 'Marca / código' },
+      { key: 'air_filter', label: 'Filtro de ar', placeholder: 'Marca / código' },
+      { key: 'shop', label: 'Oficina / responsável', placeholder: 'Quem executou' },
+    ],
+  },
+  pneu: {
+    label: 'Troca de pneus',
+    color: 'var(--info)',
+    defaultName: 'Troca de pneus',
+    fields: [
+      {
+        key: 'positions',
+        label: 'Posições trocadas',
+        type: 'checkboxes',
+        options: ['Dianteiro esq.', 'Dianteiro dir.', 'Traseiro esq.', 'Traseiro dir.', 'Estepe', 'Todos'],
+      },
+      { key: 'tire_brand', label: 'Marca', placeholder: 'Ex: Michelin' },
+      { key: 'tire_size', label: 'Medida', placeholder: 'Ex: 225/70 R19.5' },
+      { key: 'tire_qty', label: 'Quantidade de pneus', type: 'number', step: '1', placeholder: 'Ex: 4' },
+      { key: 'alignment', label: 'Alinhamento / balanceamento', type: 'select', options: ['Não', 'Sim'] },
+      { key: 'shop', label: 'Oficina / responsável', placeholder: 'Quem executou' },
+    ],
+  },
+  peca: {
+    label: 'Troca de peças',
+    color: 'var(--violet)',
+    defaultName: '',
+    nameLabel: 'Peça trocada',
+    namePlaceholder: 'Ex: Bomba d’água',
+    fields: [
+      { key: 'part_number', label: 'Número da peça', placeholder: 'Part number / SKU' },
+      { key: 'brand', label: 'Marca', placeholder: 'Ex: Bosch' },
+      { key: 'supplier', label: 'Onde comprou', placeholder: 'Ex: AutoZone' },
+      { key: 'warranty', label: 'Garantia', placeholder: 'Ex: 12 meses' },
+      { key: 'shop', label: 'Oficina / responsável', placeholder: 'Quem executou' },
+    ],
+  },
+  revisao: {
+    label: 'Revisão / inspeção',
+    color: 'var(--ok)',
+    defaultName: 'Revisão',
+    fields: [
+      { key: 'checklist', label: 'O que foi revisado', placeholder: 'Ex: freios, suspensão, luzes' },
+      { key: 'result', label: 'Resultado', type: 'select', options: ['Aprovado', 'Aprovado com ressalva', 'Reprovado'] },
+      { key: 'next_date', label: 'Próxima inspeção', type: 'date' },
+      { key: 'shop', label: 'Oficina / responsável', placeholder: 'Quem executou' },
+    ],
+  },
+  outro: {
+    label: 'Outro serviço',
+    color: 'var(--text-secondary)',
+    defaultName: '',
+    nameLabel: 'Serviço',
+    namePlaceholder: 'Ex: Funilaria',
+    fields: [
+      { key: 'shop', label: 'Oficina / responsável', placeholder: 'Quem executou' },
+    ],
+  },
 };
 
 export function maintenanceType(type) {
   return MAINTENANCE_TYPES[type] || MAINTENANCE_TYPES.peca;
+}
+
+/** Transforma os campos específicos num resumo legível para a tabela. */
+export function describeDetails(type, details) {
+  if (!details) return '';
+  const config = maintenanceType(type);
+  return config.fields
+    .map(({ key, label }) => {
+      const v = details[key];
+      if (v == null || v === '' || (Array.isArray(v) && v.length === 0)) return null;
+      return `${label}: ${Array.isArray(v) ? v.join(', ') : v}`;
+    })
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /**

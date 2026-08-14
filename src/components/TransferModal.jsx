@@ -9,6 +9,7 @@ import Modal from './Modal';
 export default function TransferModal({ open, onClose, onSubmit, entity, kind, teams, teamNameOf }) {
   const [toTeamId, setToTeamId] = useState('');
   const [quantity, setQuantity] = useState(1);
+  const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
   const isItem = kind === 'item';
@@ -18,6 +19,7 @@ export default function TransferModal({ open, onClose, onSubmit, entity, kind, t
   useEffect(() => {
     if (!open) return;
     setQuantity(isItem ? Math.min(1, max) || 1 : 1);
+    setNotes('');
     const firstOther = ['', ...teams.map((t) => t.id)].find((id) => id !== currentTeamId);
     setToTeamId(firstOther ?? '');
   }, [open, isItem, max, teams, currentTeamId]);
@@ -29,8 +31,8 @@ export default function TransferModal({ open, onClose, onSubmit, entity, kind, t
     setSaving(true);
     try {
       await onSubmit(isItem
-        ? { itemId: entity.id, quantity: Number(quantity), toTeamId: toTeamId || null }
-        : { assetId: entity.id, toTeamId: toTeamId || null });
+        ? { itemId: entity.id, quantity: Number(quantity), toTeamId: toTeamId || null, notes }
+        : { assetId: entity.id, toTeamId: toTeamId || null, notes });
       onClose();
     } finally {
       setSaving(false);
@@ -82,6 +84,19 @@ export default function TransferModal({ open, onClose, onSubmit, entity, kind, t
             />
           </div>
         )}
+
+        <div>
+          <label className="mb-1.5 block text-[12.5px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+            Motivo / observação (opcional)
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Ex: veio para o Yard Apopka pois estava quebrada"
+            className="input-apple resize-none"
+          />
+        </div>
 
         <button
           type="submit"

@@ -70,20 +70,20 @@ export function exportMovementsPDF(movements) {
 
   autoTable(doc, {
     startY: 37,
-    head: [['Data', 'Tipo', 'Registro', 'Descrição', 'Qtd', 'Equipe', 'Usuário']],
+    head: [['Data', 'Tipo', 'Registro', 'Movimentação', 'Qtd', 'Observação', 'Usuário']],
     body: movements.map((m) => [
       fmtDateTime(m.created_at),
       KIND_LABEL[m.kind] || m.kind,
       m.entity_name,
       m.description,
       m.quantity ?? '—',
-      m.team_name || 'Geral',
+      m.notes || '—',
       m.user_name || '—',
     ]),
     styles: { fontSize: 8.5, cellPadding: 4 },
     headStyles: { fillColor: ACCENT, textColor: 255 },
     alternateRowStyles: { fillColor: [245, 247, 250] },
-    columnStyles: { 3: { cellWidth: 90 } },
+    columnStyles: { 3: { cellWidth: 75 }, 5: { cellWidth: 70 } },
   });
 
   doc.save(`historico_${new Date().toISOString().slice(0, 10)}.pdf`);

@@ -12,6 +12,7 @@ import Equipment from './pages/Equipment';
 import AssetDetail from './pages/AssetDetail';
 import Teams from './pages/Teams';
 import Categories from './pages/Categories';
+import Documents from './pages/Documents';
 import Reports from './pages/Reports';
 import History from './pages/History';
 import Invoices from './pages/Invoices';
@@ -38,6 +39,7 @@ function AppRoutes() {
         <Route path="/equipamentos/asset/:assetId" element={<AssetDetail />} />
         <Route path="/equipes" element={<Teams />} />
         <Route path="/categorias" element={<Categories />} />
+        <Route path="/documentos" element={<Documents />} />
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/historico" element={<History />} />
         <Route path="/invoices" element={<Invoices />} />

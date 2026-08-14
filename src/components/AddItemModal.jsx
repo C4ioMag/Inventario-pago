@@ -59,13 +59,17 @@ export default function AddItemModal({ open, onClose, onSubmit, item, teams, def
           <Field label="Quantidade">
             <input required type="number" min="0" step="1" value={form.quantity} onChange={set('quantity')} placeholder="0" className="input-apple" />
           </Field>
-          <Field label="Preço/un (USD)">
-            <input required type="number" min="0" step="0.01" value={form.unit_price} onChange={set('unit_price')} placeholder="0.00" className="input-apple" />
+          <Field label="Preço/un (opcional)">
+            <input type="number" min="0" step="0.01" value={form.unit_price} onChange={set('unit_price')} placeholder="—" className="input-apple" />
           </Field>
           <Field label="Estoque mín.">
             <input type="number" min="0" step="1" value={form.min_quantity} onChange={set('min_quantity')} placeholder="0" className="input-apple" />
           </Field>
         </div>
+
+        <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+          Preencha o preço só nos itens que são cobrados — ele é usado no invoice.
+        </p>
 
         <Field label="Equipe">
           <select value={form.team_id} onChange={set('team_id')} className="input-apple">

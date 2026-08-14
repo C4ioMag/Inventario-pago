@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeftRight, Check, ChevronRight, Package, Pencil, Plus, Trash2, Truck, X } from 'lucide-react';
+import { ArrowLeftRight, ChevronRight, Package, Pencil, Plus, Trash2, Truck, X } from 'lucide-react';
 import { fmtUSD } from '../lib/format';
 import StatusBadge, { itemStatus } from './StatusBadge';
 
@@ -10,19 +10,14 @@ import StatusBadge, { itemStatus } from './StatusBadge';
  */
 export default function TeamPanel({
   open, team, assets, items, initialTab = 'assets',
-  onClose, onOpenAsset, onAddAsset, onAddItem, onTransferAsset, onTransferItem, onRename, onDelete,
+  onClose, onOpenAsset, onAddAsset, onAddItem, onTransferAsset, onTransferItem, onEdit, onDelete,
 }) {
   const [tab, setTab] = useState(initialTab);
-  const [renaming, setRenaming] = useState(false);
-  const [draftName, setDraftName] = useState('');
 
   const isYard = !team?.id;
 
   useEffect(() => {
-    if (open) {
-      setTab(initialTab);
-      setRenaming(false);
-    }
+    if (open) setTab(initialTab);
   }, [open, initialTab]);
 
   const stockValue = useMemo(
@@ -35,12 +30,6 @@ export default function TeamPanel({
     for (const a of assets) map.set(a.tipo || 'Sem categoria', (map.get(a.tipo || 'Sem categoria') || 0) + 1);
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
   }, [assets]);
-
-  async function commitRename() {
-    const name = draftName.trim();
-    if (name && name !== team.name) await onRename(team.id, { name });
-    setRenaming(false);
-  }
 
   return (
     <AnimatePresence>
@@ -68,39 +57,9 @@ export default function TeamPanel({
             <div className="flex items-start justify-between gap-4 border-b px-6 pb-4 pt-5" style={{ borderColor: 'var(--border)' }}>
               <div className="min-w-0 flex-1">
                 <p className="label-caps">{isYard ? 'Yard · geral' : 'Equipe'}</p>
-                {renaming ? (
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <input
-                      autoFocus
-                      value={draftName}
-                      onChange={(e) => setDraftName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') commitRename();
-                        if (e.key === 'Escape') setRenaming(false);
-                      }}
-                      className="input-apple max-w-[280px] text-[18px] font-bold"
-                    />
-                    <button onClick={commitRename} className="btn-ghost flex h-8 w-8 items-center justify-center">
-                      <Check size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="mt-1 flex items-center gap-2">
-                    <h2 className="truncate text-[22px] font-bold" style={{ color: 'var(--text)', letterSpacing: '-0.02em' }}>
-                      {team.name}
-                    </h2>
-                    {!isYard && (
-                      <button
-                        onClick={() => { setDraftName(team.name); setRenaming(true); }}
-                        className="flex h-7 w-7 items-center justify-center rounded-md border"
-                        style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                        title="Renomear equipe"
-                      >
-                        <Pencil size={12} />
-                      </button>
-                    )}
-                  </div>
-                )}
+                <h2 className="mt-1 truncate text-[22px] font-bold" style={{ color: 'var(--text)', letterSpacing: '-0.02em' }}>
+                  {team.name}
+                </h2>
                 {team.supervisor && (
                   <p className="mt-1 text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>
                     Supervisor · {team.supervisor}
@@ -109,6 +68,15 @@ export default function TeamPanel({
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
+                {!isYard && (
+                  <button
+                    onClick={onEdit}
+                    className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-[12.5px]"
+                    title="Editar equipe"
+                  >
+                    <Pencil size={13} /> Editar
+                  </button>
+                )}
                 {!isYard && (
                   <button
                     onClick={onDelete}

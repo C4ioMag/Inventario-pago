@@ -10,7 +10,7 @@ import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
 import { fmtDate, fmtDateTime, fmtUSD } from '../lib/format';
 import { movementKind } from '../lib/movements';
-import { fmtNum, maintenanceType, oilStatus } from '../lib/maintenance';
+import { describeDetails, fmtNum, maintenanceType, oilStatus } from '../lib/maintenance';
 
 export default function AssetDetail() {
   const { assetId } = useParams();
@@ -198,9 +198,16 @@ export default function AssetDetail() {
                               {t.label}
                             </span>
                           </td>
-                          <td className="cell-strong">
-                            {h.part_name}
-                            {h.notes && <span className="ml-1.5 font-normal" style={{ color: 'var(--text-secondary)' }}>· {h.notes}</span>}
+                          <td>
+                            <span className="cell-strong">{h.part_name}</span>
+                            {describeDetails(h.type, h.details) && (
+                              <span className="mt-0.5 block text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                                {describeDetails(h.type, h.details)}
+                              </span>
+                            )}
+                            {h.notes && (
+                              <span className="mt-0.5 block text-[12px]" style={{ color: 'var(--text-tertiary)' }}>{h.notes}</span>
+                            )}
                           </td>
                           <td className="text-right tabular-nums">{h.odometer != null ? fmtNum(h.odometer) : '—'}</td>
                           <td className="text-right tabular-nums">{h.cost != null ? fmtUSD(h.cost) : '—'}</td>
