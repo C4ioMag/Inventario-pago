@@ -134,9 +134,11 @@ create table if not exists documents (
   data text,                    -- conteúdo em base64 (data URL)
   asset_id text references assets(id) on delete cascade,
   team_id text references teams(id) on delete set null,
+  category text not null default 'documentos',  -- 'dot'|'registration'|'seguro'|'fotos'|'documentos'
   notes text,
   created_at timestamptz default now()
 );
+alter table documents add column if not exists category text not null default 'documentos';
 create index if not exists documents_asset_idx on documents (asset_id);
 
 -- App interno, usuário único autenticado no próprio app (sem Supabase Auth) — RLS desabilitado

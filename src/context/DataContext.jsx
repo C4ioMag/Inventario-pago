@@ -477,9 +477,11 @@ export function DataProvider({ children }) {
 
   // ---------- Documentos ----------
 
-  async function addDocument({ name, mime, size, data, assetId = null, teamId = null, notes = null }) {
+  async function addDocument({
+    name, mime, size, data, assetId = null, teamId = null, notes = null, category = 'documentos',
+  }) {
     const row = await store.documentsStore.create({
-      name, mime, size, data,
+      name, mime, size, data, category,
       asset_id: assetId, team_id: teamId, notes,
     });
     setDocuments((prev) => [row, ...prev]);

@@ -8,6 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import TransferModal from '../components/TransferModal';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
+import AssetDocuments from '../components/AssetDocuments';
 import { fmtDate, fmtDateTime, fmtUSD } from '../lib/format';
 import { movementKind } from '../lib/movements';
 import { describeDetails, fmtNum, maintenanceType, oilStatus } from '../lib/maintenance';
@@ -16,8 +17,8 @@ export default function AssetDetail() {
   const { assetId } = useParams();
   const navigate = useNavigate();
   const {
-    teams, assets, items, assetHistory, movements, categories, loading,
-    updateAsset, removeAsset, addAssetHistoryEntry, transferAsset,
+    teams, assets, items, assetHistory, movements, categories, documents, loading,
+    updateAsset, removeAsset, addAssetHistoryEntry, transferAsset, addDocument, removeDocument,
   } = useData();
 
   const [editOpen, setEditOpen] = useState(false);
@@ -38,6 +39,11 @@ export default function AssetDetail() {
   const assetMovements = useMemo(
     () => movements.filter((m) => m.entity_type === 'asset' && m.entity_id === assetId),
     [movements, assetId]
+  );
+
+  const assetDocuments = useMemo(
+    () => documents.filter((d) => d.asset_id === assetId),
+    [documents, assetId]
   );
 
   const availableItems = useMemo(
@@ -220,6 +226,13 @@ export default function AssetDetail() {
               </div>
             )}
           </section>
+
+          <AssetDocuments
+            assetId={asset.id}
+            documents={assetDocuments}
+            onUpload={addDocument}
+            onRemove={removeDocument}
+          />
 
           <section className="card overflow-hidden">
             <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--border)' }}>

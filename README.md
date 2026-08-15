@@ -16,6 +16,9 @@ Sistema de controle de inventário, equipes e frota (Power Connect USA).
   medida, alinhamento), **troca de peças** (part number, marca, fornecedor, garantia) e revisão.
   **Controle de troca de óleo**: informe o odômetro, o intervalo e a última troca — o sistema
   calcula a próxima, avisa quando está perto ou atrasada, e recalcula a cada troca registrada.
+  Cada equipamento tem ainda uma área de **documentos por categoria** — DOT, Registration,
+  Seguro, Fotos e Documentos — aceitando fotos, PDF, Word e planilhas (fotos viram
+  miniaturas com visualizador).
 - *Equipes*: clicar no card abre o painel com dois acessos — ver seus **equipamentos** e ver
   seus **itens**. Dá para transferir de lá mesmo, editar nome e supervisor, e excluir
   (nada é perdido: volta para o Yard). Buscar o nome da equipe no topo abre o painel direto.
