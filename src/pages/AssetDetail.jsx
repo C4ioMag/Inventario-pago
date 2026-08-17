@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftRight, ChevronLeft, Droplet, Pencil, Trash2, Wrench } from 'lucide-react';
+import { ArrowLeftRight, CheckCircle2, ChevronLeft, Droplet, NotebookPen, Pencil, Trash2, Wrench } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import AssetFormModal from '../components/AssetFormModal';
 import MaintenanceModal from '../components/MaintenanceModal';
+import WorkOrderModal from '../components/WorkOrderModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import TransferModal from '../components/TransferModal';
 import StatusBadge from '../components/StatusBadge';
@@ -11,7 +12,7 @@ import EmptyState from '../components/EmptyState';
 import AssetDocuments from '../components/AssetDocuments';
 import { fmtDate, fmtDateTime, fmtUSD } from '../lib/format';
 import { movementKind } from '../lib/movements';
-import { describeDetails, fmtNum, maintenanceType, oilStatus } from '../lib/maintenance';
+import { describeDetails, fmtNum, isOpenWork, maintenanceType, oilStatus, workStatus } from '../lib/maintenance';
 
 export default function AssetDetail() {
   const { assetId } = useParams();
@@ -19,10 +20,12 @@ export default function AssetDetail() {
   const {
     teams, assets, items, assetHistory, movements, categories, documents, loading,
     updateAsset, removeAsset, addAssetHistoryEntry, transferAsset, addDocument, removeDocument,
+    finishWorkOrder,
   } = useData();
 
   const [editOpen, setEditOpen] = useState(false);
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
+  const [workOrderOpen, setWorkOrderOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
 
@@ -178,9 +181,14 @@ export default function AssetDetail() {
           <section className="card overflow-hidden">
             <div className="flex items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: 'var(--border)' }}>
               <h2 className="text-[14px] font-semibold" style={{ color: 'var(--text)' }}>Histórico de manutenção</h2>
-              <button onClick={() => setMaintenanceOpen(true)} className="btn-primary flex items-center gap-2 px-3 py-1.5 text-[12.5px]">
-                <Wrench size={13} /> Registrar
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => setWorkOrderOpen(true)} className="btn-ghost flex items-center gap-2 px-3 py-1.5 text-[12.5px]">
+                  <NotebookPen size={13} /> Campo aberto
+                </button>
+                <button onClick={() => setMaintenanceOpen(true)} className="btn-primary flex items-center gap-2 px-3 py-1.5 text-[12.5px]">
+                  <Wrench size={13} /> Registrar
+                </button>
+              </div>
             </div>
             {history.length === 0 ? (
               <EmptyState icon={Wrench} title="Nenhuma manutenção registrada" hint="Registre trocas de óleo, peças e revisões para manter o histórico." />
@@ -203,9 +211,37 @@ export default function AssetDetail() {
                               <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.color }} />
                               {t.label}
                             </span>
+                            {isOpenWork(h) && (
+                              <span className="badge mt-1" style={{ background: workStatus(h).bg, color: workStatus(h).color }}>
+                                {workStatus(h).label}
+                              </span>
+                            )}
                           </td>
                           <td>
                             <span className="cell-strong">{h.part_name}</span>
+                            {h.work_done && h.work_done !== h.part_name && (
+                              <span className="mt-0.5 block whitespace-pre-wrap text-[12.5px]" style={{ color: 'var(--text)' }}>
+                                {h.work_done}
+                              </span>
+                            )}
+                            {h.parts_used && (
+                              <span className="mt-0.5 block text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                                Peças: {h.parts_used}
+                              </span>
+                            )}
+                            {h.mechanic && (
+                              <span className="mt-0.5 block text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
+                                Mecânico: {h.mechanic}
+                              </span>
+                            )}
+                            {isOpenWork(h) && (
+                              <button
+                                onClick={() => finishWorkOrder(h.id)}
+                                className="btn-ghost mt-1.5 flex items-center gap-1.5 px-2.5 py-1 text-[12px]"
+                              >
+                                <CheckCircle2 size={12} /> Marcar como pronto
+                              </button>
+                            )}
                             {describeDetails(h.type, h.details) && (
                               <span className="mt-0.5 block text-[12px]" style={{ color: 'var(--text-secondary)' }}>
                                 {describeDetails(h.type, h.details)}
@@ -286,6 +322,28 @@ export default function AssetDetail() {
         onClose={() => setMaintenanceOpen(false)}
         onSubmit={(entry) => addAssetHistoryEntry({ assetId: asset.id, ...entry })}
         items={availableItems}
+      />
+
+      <WorkOrderModal
+        open={workOrderOpen}
+        assets={assets}
+        defaultAssetId={asset.id}
+        onClose={() => setWorkOrderOpen(false)}
+        onSubmit={(data) => addAssetHistoryEntry({
+          assetId: asset.id,
+          type: data.type,
+          partName: (data.workDone.split('\n')[0] || maintenanceType(data.type).label).slice(0, 90),
+          quantity: 1,
+          date: data.date,
+          status: data.status,
+          workDone: data.workDone,
+          partsUsed: data.partsUsed,
+          mechanic: data.mechanic,
+          odometer: data.odometer,
+          cost: data.cost,
+          finishedDate: data.finishedDate,
+          details: data.mechanic ? { shop: data.mechanic } : null,
+        })}
       />
 
       <TransferModal

@@ -19,14 +19,32 @@ Sistema de controle de inventário, equipes e frota (Power Connect USA).
   Cada equipamento tem ainda uma área de **documentos por categoria** — DOT, Registration,
   Seguro, Fotos e Documentos — aceitando fotos, PDF, Word e planilhas (fotos viram
   miniaturas com visualizador).
+- *Manutenção*: área própria da oficina. Escreva o veículo (se ainda não estiver cadastrado,
+  ele é criado na hora), diga se está **em manutenção** ou **pronto**, e descreva em
+  **campo aberto** o que foi feito — as peças usadas são um campo à parte e opcional.
+  As abas separam o que está parado do que já está pronto, com busca por veículo, serviço,
+  peça ou mecânico. Ao abrir uma manutenção o equipamento passa para o status "Manutenção";
+  ao concluir (com data, complemento do serviço e custo) ele volta para "Disponível".
+  Todo registro fica no histórico do equipamento e pode ser editado, reaberto ou excluído.
 - *Equipes*: clicar no card abre o painel com dois acessos — ver seus **equipamentos** e ver
   seus **itens**. Dá para transferir de lá mesmo, editar nome e supervisor, e excluir
   (nada é perdido: volta para o Yard). Buscar o nome da equipe no topo abre o painel direto.
 
-**Documentos** — envie PDFs, planilhas e fotos (arraste ou clique). Se for planilha, o sistema
-oferece **importar os dados** direto: reconhece as colunas (código, tipo, modelo, placa, VIN,
-equipe, supervisor…) e cria os equipamentos ou itens em lote, casando com as equipes e
-categorias que já existem.
+**Documentos** — envie PDFs, planilhas e fotos (arraste ou clique) e **leia os dados** deles
+direto para o sistema:
+
+- *Planilhas (.xlsx/.csv)*: o cabeçalho é encontrado sozinho mesmo quando a planilha tem
+  título ou linhas em branco no topo (e dá para escolher a linha e a aba na mão). São
+  reconhecidas colunas em português e inglês — código/unit, tipo, modelo/make, ano, placa,
+  **VIN/chassi/serial**, equipe, supervisor, proprietário, status, odômetro/hourmeter,
+  intervalo e última troca de óleo, Verizon, Bouncie, Samsung e E-ZPass. **Nenhuma coluna se
+  perde**: as que o sistema não conhece são guardadas em Observações no formato `Coluna: valor`.
+  Importar de novo **completa** os equipamentos que já existem com os campos que estavam
+  vazios, sem apagar nada.
+- *PDFs*: registration, título, seguro ou inspeção são lidos e o sistema reconhece VIN, placa,
+  ano, modelo, proprietário, validade e odômetro — você confere na tela e escolhe em qual
+  equipamento gravar (só entram os campos que ainda estiverem vazios). O texto extraído pode
+  ser visto por inteiro. PDFs digitalizados (imagem pura) não têm texto para ler e avisam isso.
 
 **Categorias** — os tipos de equipamento (Truck, Trailer, Vacuum…), com atalho para
 cadastrar os padrões da frota de uma vez.

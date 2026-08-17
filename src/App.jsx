@@ -10,6 +10,7 @@ import Overview from './pages/Overview';
 import Items from './pages/Items';
 import Equipment from './pages/Equipment';
 import AssetDetail from './pages/AssetDetail';
+import Maintenance from './pages/Maintenance';
 import Teams from './pages/Teams';
 import Categories from './pages/Categories';
 import Documents from './pages/Documents';
@@ -37,6 +38,7 @@ function AppRoutes() {
         <Route path="/itens" element={<Items />} />
         <Route path="/equipamentos" element={<Equipment />} />
         <Route path="/equipamentos/asset/:assetId" element={<AssetDetail />} />
+        <Route path="/manutencao" element={<Maintenance />} />
         <Route path="/equipes" element={<Teams />} />
         <Route path="/categorias" element={<Categories />} />
         <Route path="/documentos" element={<Documents />} />

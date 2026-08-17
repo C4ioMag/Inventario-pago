@@ -95,7 +95,13 @@ create table if not exists asset_parts_history (
   odometer numeric,
   cost numeric,
   details jsonb,                       -- campos específicos de cada tipo
-  date text not null,
+  -- Ordem de manutenção em campo aberto
+  status text not null default 'concluido',  -- 'em_andamento' | 'concluido'
+  work_done text,                      -- texto livre: o que foi feito
+  parts_used text,                     -- texto livre: peças usadas (opcional)
+  mechanic text,                       -- mecânico / oficina
+  finished_date text,                  -- data de conclusão (YYYY-MM-DD)
+  date text not null,                  -- data de entrada / do serviço
   notes text,
   created_at timestamptz default now()
 );
@@ -103,6 +109,12 @@ alter table asset_parts_history add column if not exists type text not null defa
 alter table asset_parts_history add column if not exists odometer numeric;
 alter table asset_parts_history add column if not exists cost numeric;
 alter table asset_parts_history add column if not exists details jsonb;
+alter table asset_parts_history add column if not exists status text not null default 'concluido';
+alter table asset_parts_history add column if not exists work_done text;
+alter table asset_parts_history add column if not exists parts_used text;
+alter table asset_parts_history add column if not exists mechanic text;
+alter table asset_parts_history add column if not exists finished_date text;
+create index if not exists asset_parts_history_status_idx on asset_parts_history (status);
 
 -- MOVIMENTAÇÕES — trilha de tudo que entra, sai ou muda de equipe
 create table if not exists movements (

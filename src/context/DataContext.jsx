@@ -416,6 +416,7 @@ export function DataProvider({ children }) {
   async function addAssetHistoryEntry({
     assetId, itemId, partName, quantity, date, notes,
     type = 'peca', odometer = null, cost = null, details = null,
+    status = 'concluido', workDone = null, partsUsed = null, mechanic = null, finishedDate = null,
     silent = false, asset: assetOverride = null,
   }) {
     const asset = assetOverride || assets.find((a) => a.id === assetId);
@@ -438,10 +439,21 @@ export function DataProvider({ children }) {
       odometer: odometer === '' || odometer === null ? null : Number(odometer),
       cost: cost === '' || cost === null ? null : Number(cost),
       details: details && Object.keys(details).length ? details : null,
+      status,
+      work_done: workDone || null,
+      parts_used: partsUsed || null,
+      mechanic: mechanic || null,
+      finished_date: status === 'concluido' ? (finishedDate || date) : null,
       date,
       notes: notes || null,
     });
     setAssetHistory((prev) => [row, ...prev]);
+
+    // Ordem aberta deixa o equipamento marcado como "em manutenção"
+    if (status === 'em_andamento' && asset && asset.status !== 'manutencao') {
+      const updatedAsset = await store.assetsStore.update(assetId, { status: 'manutencao' });
+      setAssets((prev) => prev.map((a) => (a.id === assetId ? updatedAsset : a)));
+    }
 
     // Troca de óleo redefine a base do cálculo da próxima
     if (type === 'oleo' && row.odometer != null) {
@@ -466,12 +478,121 @@ export function DataProvider({ children }) {
       entity_id: assetId,
       entity_name: asset?.name || 'Equipamento',
       quantity: quantity || 1,
-      description: `${typeLabel}: ${partName}${notes ? ` — ${notes}` : ''}`,
+      description: `${typeLabel}: ${partName}${status === 'em_andamento' ? ' (em andamento)' : ''}${notes ? ` — ${notes}` : ''}`,
       team_id: asset?.team_id || null,
       team_name: teamNameOf(asset?.team_id),
     });
 
     if (!silent) notify('Manutenção registrada no histórico', 'success');
+    return row;
+  }
+
+  /**
+   * Edita um registro de manutenção já gravado (inclusive o texto livre).
+   * Se a situação mudar, o status do equipamento acompanha.
+   */
+  async function updateAssetHistoryEntry(id, patch) {
+    const before = assetHistory.find((h) => h.id === id);
+    const updated = await store.assetHistoryStore.update(id, patch);
+    const history = assetHistory.map((h) => (h.id === id ? updated : h));
+    setAssetHistory(history);
+
+    if (patch.status && before && patch.status !== (before.status || 'concluido')) {
+      const asset = assets.find((a) => a.id === updated.asset_id);
+      const stillOpen = history.some((h) => h.asset_id === updated.asset_id && h.status === 'em_andamento');
+      const nextStatus = stillOpen ? 'manutencao' : 'disponivel';
+      if (asset && asset.status !== nextStatus && (stillOpen || asset.status === 'manutencao')) {
+        const updatedAsset = await store.assetsStore.update(asset.id, { status: nextStatus });
+        setAssets((prev) => prev.map((a) => (a.id === asset.id ? updatedAsset : a)));
+      }
+    }
+
+    notify('Manutenção atualizada', 'success');
+    return updated;
+  }
+
+  /**
+   * Fecha uma ordem: marca como pronta e, se o equipamento não tiver outra
+   * manutenção aberta, devolve o status dele para "disponível".
+   */
+  async function finishWorkOrder(id, { finishedDate = null, workDone = null, partsUsed = null, cost = null } = {}) {
+    const entry = assetHistory.find((h) => h.id === id);
+    if (!entry) return;
+    const patch = {
+      status: 'concluido',
+      finished_date: finishedDate || new Date().toISOString().slice(0, 10),
+    };
+    if (workDone != null) patch.work_done = workDone;
+    if (partsUsed != null) patch.parts_used = partsUsed;
+    if (cost != null) patch.cost = cost === '' ? null : Number(cost);
+
+    const updated = await store.assetHistoryStore.update(id, patch);
+    setAssetHistory((prev) => prev.map((h) => (h.id === id ? updated : h)));
+
+    const asset = assets.find((a) => a.id === entry.asset_id);
+    const stillOpen = assetHistory.some(
+      (h) => h.asset_id === entry.asset_id && h.id !== id && h.status === 'em_andamento'
+    );
+    if (asset && !stillOpen && asset.status === 'manutencao') {
+      const updatedAsset = await store.assetsStore.update(asset.id, { status: 'disponivel' });
+      setAssets((prev) => prev.map((a) => (a.id === asset.id ? updatedAsset : a)));
+    }
+
+    await logMovement({
+      kind: 'manutencao',
+      entity_type: 'asset',
+      entity_id: entry.asset_id,
+      entity_name: asset?.name || 'Equipamento',
+      description: `Manutenção concluída: ${updated.work_done || updated.part_name}`,
+      from_value: 'Em manutenção',
+      to_value: 'Pronto',
+      team_id: asset?.team_id || null,
+      team_name: teamNameOf(asset?.team_id),
+    });
+
+    notify('Manutenção concluída', 'success');
+    return updated;
+  }
+
+  /** Reabre uma manutenção concluída (erro de fechamento, serviço voltou). */
+  async function reopenWorkOrder(id) {
+    const entry = assetHistory.find((h) => h.id === id);
+    if (!entry) return;
+    const updated = await store.assetHistoryStore.update(id, { status: 'em_andamento', finished_date: null });
+    setAssetHistory((prev) => prev.map((h) => (h.id === id ? updated : h)));
+    const asset = assets.find((a) => a.id === entry.asset_id);
+    if (asset && asset.status !== 'manutencao') {
+      const updatedAsset = await store.assetsStore.update(asset.id, { status: 'manutencao' });
+      setAssets((prev) => prev.map((a) => (a.id === asset.id ? updatedAsset : a)));
+    }
+    notify('Manutenção reaberta', 'success');
+    return updated;
+  }
+
+  async function removeAssetHistoryEntry(id) {
+    await store.assetHistoryStore.remove(id);
+    setAssetHistory((prev) => prev.filter((h) => h.id !== id));
+    notify('Registro de manutenção excluído', 'success');
+  }
+
+  /**
+   * Devolve o equipamento com esse nome; se não existir, cadastra na hora.
+   * É o que permite digitar o veículo direto na tela de manutenção.
+   */
+  async function ensureAssetByName(name, extra = {}) {
+    const clean = String(name || '').trim();
+    if (!clean) return null;
+    const found = assets.find((a) => (a.name || '').trim().toLowerCase() === clean.toLowerCase());
+    if (found) return found;
+    const row = await store.assetsStore.create({ name: clean, status: 'disponivel', ...extra });
+    setAssets((prev) => [...prev, row]);
+    await logMovement({
+      kind: 'cadastro',
+      entity_type: 'asset',
+      entity_id: row.id,
+      entity_name: row.name,
+      description: 'Equipamento criado a partir da tela de manutenção',
+    });
     return row;
   }
 
@@ -508,16 +629,17 @@ export function DataProvider({ children }) {
    * Categorias da planilha (ex.: "COMPRESSOR") são casadas com as já cadastradas
    * ("Compressor") sem diferenciar maiúsculas; as novas viram categoria de verdade.
    */
-  async function importAssets(rows) {
-    const existing = new Set(assets.map((a) => (a.name || '').trim().toLowerCase()));
+  async function importAssets(rows, { updateExisting = true } = {}) {
+    const byName = new Map(assets.map((a) => [(a.name || '').trim().toLowerCase(), a]));
     const byLower = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c.name]));
     const newCategories = [];
     const created = [];
+    const updated = [];
+    let skipped = 0;
 
     for (const r of rows) {
       const name = (r.name || '').trim();
-      if (!name || existing.has(name.toLowerCase())) continue;
-      existing.add(name.toLowerCase());
+      if (!name) continue;
 
       let tipo = (r.tipo || '').trim() || null;
       if (tipo) {
@@ -531,12 +653,44 @@ export function DataProvider({ children }) {
           tipo = pretty;
         }
       }
-      created.push(await store.assetsStore.create({ ...r, name, tipo }));
+
+      const current = byName.get(name.toLowerCase());
+      if (!current) {
+        const row = await store.assetsStore.create({ ...r, name, tipo });
+        byName.set(name.toLowerCase(), row);
+        created.push(row);
+        continue;
+      }
+
+      if (!updateExisting) {
+        skipped += 1;
+        continue;
+      }
+
+      // Só preenche o que a planilha trouxe e o cadastro ainda não tem —
+      // importar de novo nunca apaga informação já cadastrada.
+      const patch = {};
+      for (const [key, value] of Object.entries({ ...r, tipo })) {
+        if (key === 'name' || value == null || value === '') continue;
+        if (key === 'status' && value === 'disponivel') continue;
+        const before = current[key];
+        if (before == null || before === '') patch[key] = value;
+      }
+      if (Object.keys(patch).length === 0) {
+        skipped += 1;
+        continue;
+      }
+      const row = await store.assetsStore.update(current.id, { ...patch, updated_at: new Date().toISOString() });
+      byName.set(name.toLowerCase(), row);
+      updated.push(row);
     }
 
     if (newCategories.length) setCategories((prev) => [...prev, ...newCategories]);
-    if (created.length) setAssets((prev) => [...prev, ...created]);
-    return created;
+    if (created.length || updated.length) {
+      const patched = new Map(updated.map((a) => [a.id, a]));
+      setAssets((prev) => [...prev.map((a) => patched.get(a.id) || a), ...created]);
+    }
+    return { created, updated, skipped };
   }
 
   /** Importa itens de estoque em lote (planilha), somando quando o item já existe na equipe. */
@@ -603,6 +757,11 @@ export function DataProvider({ children }) {
         updateAsset,
         removeAsset,
         addAssetHistoryEntry,
+        updateAssetHistoryEntry,
+        removeAssetHistoryEntry,
+        finishWorkOrder,
+        reopenWorkOrder,
+        ensureAssetByName,
         addDocument,
         removeDocument,
         updateMovementNotes,
