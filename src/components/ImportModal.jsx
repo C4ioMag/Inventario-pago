@@ -1,54 +1,78 @@
-import { useEffect, useRef, useState } from 'react';
-import { FileSpreadsheet, Upload } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FileSpreadsheet, FileText, Upload } from 'lucide-react';
 import Modal from './Modal';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
+import {
+  ASSET_FIELDS, ITEM_FIELDS, buildAssetRows, buildItemRows,
+  cellText, detectHeaderRow, fieldLabel, normKey,
+} from '../lib/importMap';
+import { PDF_FIELD_LABELS, extractPdfText, extractVehicleFields } from '../lib/pdfText';
 
-/** Nomes de coluna aceitos para cada campo — cobre PT e EN, sem acento. */
-const ASSET_COLUMNS = {
-  name: ['codigo', 'code', 'nome', 'name', 'equipamento', 'asset'],
-  tipo: ['tipo', 'type', 'categoria', 'category'],
-  model: ['modelo', 'model'],
-  plate: ['placa', 'plate', 'tag'],
-  vin: ['vin', 'vin number', 'chassi'],
-  year: ['ano', 'year'],
-  team: ['equipe', 'team', 'crew'],
-  supervisor: ['supervisor', 'responsavel'],
-  owner: ['proprietario', 'owner'],
-  notes: ['observacao', 'observacoes', 'notes', 'obs'],
-};
+const PDF_RE = /\.pdf$/i;
 
-const ITEM_COLUMNS = {
-  name: ['item', 'nome', 'name', 'produto', 'descricao'],
-  quantity: ['quantidade', 'qtd', 'quantity', 'qty'],
-  unitPrice: ['preco', 'preço', 'valor', 'price', 'unit price', 'custo'],
-  minQuantity: ['minimo', 'estoque minimo', 'min'],
-  team: ['equipe', 'team', 'crew'],
-};
+/** CSV/TSV com aspas, ponto-e-vírgula ou tabulação. */
+function parseDelimited(text) {
+  const sample = text.slice(0, 5000);
+  const counts = [[',', 0], [';', 0], ['\t', 0]].map(([d]) => [d, (sample.match(new RegExp(`\\${d}`, 'g')) || []).length]);
+  const delim = counts.sort((a, b) => b[1] - a[1])[0][0];
 
-const norm = (v) => String(v ?? '').trim().toLowerCase()
-  .normalize('NFD').replace(/[̀-ͯ]/g, '');
-
-function pickColumn(headers, candidates) {
-  const idx = headers.findIndex((h) => candidates.includes(norm(h)));
-  return idx === -1 ? null : idx;
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else cell += c;
+      continue;
+    }
+    if (c === '"') { quoted = true; continue; }
+    if (c === delim) { row.push(cell); cell = ''; continue; }
+    if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; continue; }
+    if (c === '\r') continue;
+    cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((v) => String(v).trim()));
 }
 
 export default function ImportModal({ open, document: doc, onClose }) {
-  const { teams, importAssets, importItems, addDocument } = useData();
+  const { teams, assets, importAssets, importItems, addDocument, updateAsset, ensureAssetByName } = useData();
   const { notify } = useToast();
   const inputRef = useRef(null);
 
   const [mode, setMode] = useState('assets');
-  const [rows, setRows] = useState(null);      // { headers, data, fileName }
+  const [file, setFile] = useState(null);          // { name }
+  const [sheets, setSheets] = useState([]);        // [{ name, rows }]
+  const [sheetIdx, setSheetIdx] = useState(0);
+  const [headerRow, setHeaderRow] = useState(0);
+  const [headerAuto, setHeaderAuto] = useState(true);
+  const [updateExisting, setUpdateExisting] = useState(true);
+  const [pdf, setPdf] = useState(null);            // { text, fields, pages }
+  const [pdfTarget, setPdfTarget] = useState('');
+  const [showText, setShowText] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null);
 
+  function reset() {
+    setFile(null);
+    setSheets([]);
+    setSheetIdx(0);
+    setHeaderRow(0);
+    setHeaderAuto(true);
+    setPdf(null);
+    setPdfTarget('');
+    setShowText(false);
+    setResult(null);
+  }
+
   useEffect(() => {
     if (!open) return;
-    setRows(null);
-    setResult(null);
+    reset();
     setMode('assets');
     if (doc?.data) parseDataUrl(doc.data, doc.name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,36 +81,48 @@ export default function ImportModal({ open, document: doc, onClose }) {
   async function parseBuffer(buffer, fileName) {
     setParsing(true);
     try {
-      // exceljs só é carregado quando alguém realmente importa uma planilha
-      const ExcelJS = (await import('exceljs')).default;
-      const wb = new ExcelJS.Workbook();
-
-      if (/\.csv$/i.test(fileName)) {
-        const text = new TextDecoder().decode(buffer);
-        const lines = text.split(/\r?\n/).filter((l) => l.trim());
-        const split = (line) => line.split(/[;,\t]/).map((c) => c.replace(/^"|"$/g, '').trim());
-        const headers = split(lines[0] || '');
-        const data = lines.slice(1).map(split);
-        setRows({ headers, data, fileName });
-      } else {
-        await wb.xlsx.load(buffer);
-        const ws = wb.worksheets[0];
-        if (!ws) throw new Error('Planilha vazia');
-        const all = [];
-        ws.eachRow((row) => {
-          const values = [];
-          row.eachCell({ includeEmpty: true }, (cell) => {
-            const v = cell.value;
-            values.push(v && typeof v === 'object' ? (v.text ?? v.result ?? '') : (v ?? ''));
-          });
-          all.push(values);
-        });
-        const [headers = [], ...data] = all;
-        setRows({ headers: headers.map(String), data, fileName });
+      if (PDF_RE.test(fileName)) {
+        const { text, pages } = await extractPdfText(buffer);
+        if (!text.trim()) {
+          notify('Esse PDF não tem texto selecionável (parece digitalizado). Digite os dados manualmente.', 'error');
+        }
+        setPdf({ text, pages, fields: extractVehicleFields(text) });
+        setFile({ name: fileName });
+        return;
       }
+
+      if (/\.(csv|tsv|txt)$/i.test(fileName)) {
+        const rows = parseDelimited(new TextDecoder().decode(buffer));
+        setSheets([{ name: fileName, rows }]);
+      } else {
+        // exceljs só é carregado quando alguém realmente importa uma planilha
+        const ExcelJS = (await import('exceljs')).default;
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+
+        const parsed = wb.worksheets.map((ws) => {
+          const width = Math.max(ws.columnCount || 0, ws.actualColumnCount || 0);
+          const rows = [];
+          // Percorre por índice (não `eachRow`) para não perder o alinhamento
+          // das colunas quando há linhas ou células vazias no meio.
+          for (let r = 1; r <= ws.rowCount; r++) {
+            const row = ws.getRow(r);
+            const values = [];
+            for (let c = 1; c <= width; c++) values.push(row.getCell(c).value);
+            if (values.some((v) => cellText(v).trim())) rows.push(values);
+          }
+          return { name: ws.name, rows };
+        }).filter((s) => s.rows.length);
+
+        if (!parsed.length) throw new Error('A planilha está vazia');
+        setSheets(parsed);
+      }
+      setSheetIdx(0);
+      setHeaderAuto(true);
+      setFile({ name: fileName });
     } catch (err) {
-      notify(err.message || 'Não consegui ler essa planilha', 'error');
-      setRows(null);
+      notify(err.message || 'Não consegui ler esse arquivo', 'error');
+      reset();
     } finally {
       setParsing(false);
     }
@@ -101,69 +137,45 @@ export default function ImportModal({ open, document: doc, onClose }) {
   }
 
   async function handlePick(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const buffer = await file.arrayBuffer();
-    await parseBuffer(buffer, file.name);
+    const picked = e.target.files?.[0];
+    if (!picked) return;
+    const buffer = await picked.arrayBuffer();
+    await parseBuffer(buffer, picked.name);
     // guarda o arquivo junto, para ficar registrado de onde veio a importação
     const reader = new FileReader();
-    reader.onload = () => addDocument({ name: file.name, mime: file.type, size: file.size, data: reader.result });
-    reader.readAsDataURL(file);
+    reader.onload = () => addDocument({ name: picked.name, mime: picked.type, size: picked.size, data: reader.result });
+    reader.readAsDataURL(picked);
   }
 
-  const teamByName = new Map(teams.map((t) => [norm(t.name), t.id]));
+  const sheet = sheets[sheetIdx];
+  const fields = mode === 'assets' ? ASSET_FIELDS : ITEM_FIELDS;
 
-  function buildRows() {
-    const { headers, data } = rows;
-    const map = mode === 'assets' ? ASSET_COLUMNS : ITEM_COLUMNS;
-    const cols = Object.fromEntries(
-      Object.entries(map).map(([field, candidates]) => [field, pickColumn(headers, candidates)])
-    );
-    if (cols.name == null) return { error: 'Não achei a coluna com o nome/código. Renomeie a coluna para "Nome" ou "Código".', list: [] };
+  const detected = useMemo(
+    () => (sheet ? detectHeaderRow(sheet.rows, fields) : 0),
+    [sheet, fields]
+  );
+  const headerIndex = headerAuto ? detected : Math.min(headerRow, (sheet?.rows.length || 1) - 1);
 
-    const list = data
-      .map((r) => {
-        const get = (f) => (cols[f] == null ? '' : String(r[cols[f]] ?? '').trim());
-        const name = get('name');
-        if (!name) return null;
-        const teamId = teamByName.get(norm(get('team'))) || null;
+  const teamByName = useMemo(() => new Map(teams.map((t) => [normKey(t.name), t.id])), [teams]);
 
-        if (mode === 'assets') {
-          return {
-            name,
-            tipo: get('tipo') || null,
-            model: get('model') || null,
-            plate: get('plate') || null,
-            vin: get('vin') || null,
-            year: get('year') || null,
-            supervisor: get('supervisor') || null,
-            owner: get('owner') || null,
-            notes: get('notes') || null,
-            team_id: teamId,
-            status: 'disponivel',
-          };
-        }
-        return {
-          name,
-          quantity: Number(String(get('quantity')).replace(',', '.')) || 0,
-          unitPrice: Number(String(get('unitPrice')).replace(/[^0-9.,-]/g, '').replace(',', '.')) || 0,
-          minQuantity: Number(get('minQuantity')) || 0,
-          teamId,
-        };
-      })
-      .filter(Boolean);
-
-    return { list, cols };
-  }
-
-  const preview = rows ? buildRows() : null;
+  const preview = useMemo(() => {
+    if (!sheet) return null;
+    const headers = (sheet.rows[headerIndex] || []).map((c) => cellText(c).trim());
+    const data = sheet.rows.slice(headerIndex + 1);
+    const build = mode === 'assets' ? buildAssetRows : buildItemRows;
+    return { ...build({ headers, data, teamByName }), headers };
+  }, [sheet, headerIndex, mode, teamByName]);
 
   async function handleImport() {
     setImporting(true);
     try {
       if (mode === 'assets') {
-        const created = await importAssets(preview.list);
-        setResult(`${created.length} equipamento(s) importado(s)${preview.list.length - created.length > 0 ? ` · ${preview.list.length - created.length} já existia(m)` : ''}`);
+        const { created, updated, skipped } = await importAssets(preview.list, { updateExisting });
+        setResult([
+          `${created.length} equipamento(s) criado(s)`,
+          updated.length ? `${updated.length} atualizado(s) com dados novos` : null,
+          skipped ? `${skipped} sem mudança` : null,
+        ].filter(Boolean).join(' · '));
       } else {
         const { created, updated } = await importItems(preview.list);
         setResult(`${created.length} item(ns) criado(s)${updated.length ? ` · ${updated.length} atualizado(s)` : ''}`);
@@ -175,17 +187,61 @@ export default function ImportModal({ open, document: doc, onClose }) {
     }
   }
 
-  return (
-    <Modal open={open} onClose={onClose} title="Importar planilha" subtitle="Cria equipamentos ou itens em lote" maxWidth={600}>
-      <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-        <div className="flex gap-1 rounded-lg p-1" style={{ background: 'var(--bg-secondary)' }}>
-          <ModeTab active={mode === 'assets'} onClick={() => setMode('assets')}>Equipamentos</ModeTab>
-          <ModeTab active={mode === 'items'} onClick={() => setMode('items')}>Itens de estoque</ModeTab>
-        </div>
+  /** Aplica os campos lidos do PDF a um equipamento (existente ou novo). */
+  async function applyPdf() {
+    const f = pdf.fields;
+    setImporting(true);
+    try {
+      const patch = {};
+      if (f.vin) patch.vin = f.vin;
+      if (f.plate) patch.plate = f.plate;
+      if (f.year) patch.year = f.year;
+      if (f.model) patch.model = f.model;
+      if (f.owner) patch.owner = f.owner;
+      if (f.odometer != null) patch.odometer = f.odometer;
 
-        {!rows && (
+      let target = assets.find((a) => a.id === pdfTarget);
+      if (!target) {
+        const name = f.plate || f.vin || file.name.replace(PDF_RE, '');
+        target = await ensureAssetByName(name);
+      }
+      // não sobrescreve o que já está preenchido no cadastro
+      const safe = Object.fromEntries(
+        Object.entries(patch).filter(([k]) => target[k] == null || target[k] === '')
+      );
+      if (Object.keys(safe).length === 0) {
+        setResult(`Nada a preencher — "${target.name}" já tem esses dados.`);
+        return;
+      }
+      await updateAsset(target.id, safe);
+      setResult(`${Object.keys(safe).length} campo(s) gravado(s) em "${target.name}"`);
+    } catch (err) {
+      notify(err.message || 'Erro ao aplicar os dados do PDF', 'error');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  const pdfFilled = pdf ? Object.entries(PDF_FIELD_LABELS).filter(([k]) => pdf.fields[k] != null && pdf.fields[k] !== '') : [];
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Importar documento"
+      subtitle="Planilha (.xlsx/.csv) para criar equipamentos e itens, ou PDF para ler os dados do veículo"
+      maxWidth={640}
+    >
+      <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+        {!file && (
           <>
-            <input ref={inputRef} type="file" accept=".xlsx,.xlsm,.csv" className="hidden" onChange={handlePick} />
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".xlsx,.xlsm,.xltx,.csv,.tsv,.pdf"
+              className="hidden"
+              onChange={handlePick}
+            />
             <button
               onClick={() => inputRef.current?.click()}
               disabled={parsing}
@@ -194,20 +250,130 @@ export default function ImportModal({ open, document: doc, onClose }) {
             >
               <Upload size={22} strokeWidth={1.7} />
               <span className="mt-2.5 text-[13.5px] font-medium" style={{ color: 'var(--text)' }}>
-                {parsing ? 'Lendo planilha…' : 'Escolher planilha (.xlsx ou .csv)'}
+                {parsing ? 'Lendo arquivo…' : 'Escolher planilha ou PDF'}
               </span>
+              <span className="mt-1 text-[12.5px]">.xlsx · .csv · .pdf</span>
             </button>
           </>
         )}
 
-        {rows && preview && (
+        {file && (
+          <div className="flex items-center gap-2.5 rounded-lg px-3.5 py-2.5" style={{ background: 'var(--bg-secondary)' }}>
+            {pdf ? <FileText size={15} style={{ color: 'var(--text-tertiary)' }} />
+              : <FileSpreadsheet size={15} style={{ color: 'var(--text-tertiary)' }} />}
+            <span className="truncate text-[13px] font-medium" style={{ color: 'var(--text)' }}>{file.name}</span>
+            <button onClick={reset} className="ml-auto shrink-0 text-[12.5px] font-medium" style={{ color: 'var(--accent)' }}>
+              Trocar arquivo
+            </button>
+          </div>
+        )}
+
+        {/* ---------- PDF ---------- */}
+        {pdf && (
           <>
-            <div className="flex items-center gap-2.5 rounded-lg px-3.5 py-2.5" style={{ background: 'var(--bg-secondary)' }}>
-              <FileSpreadsheet size={15} style={{ color: 'var(--text-tertiary)' }} />
-              <span className="truncate text-[13px] font-medium" style={{ color: 'var(--text)' }}>{rows.fileName}</span>
-              <span className="ml-auto shrink-0 text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>
-                {preview.list.length} linha(s)
-              </span>
+            <div className="card overflow-hidden">
+              <div className="border-b px-4 py-2.5" style={{ borderColor: 'var(--border)' }}>
+                <p className="label-caps">Dados reconhecidos no PDF</p>
+              </div>
+              {pdfFilled.length === 0 ? (
+                <p className="px-4 py-4 text-[13px]" style={{ color: 'var(--text-secondary)' }}>
+                  Não encontrei VIN, placa ou modelo nesse arquivo. Veja o texto extraído abaixo e
+                  preencha o cadastro manualmente.
+                </p>
+              ) : (
+                <div className="row-divide">
+                  {pdfFilled.map(([key, label]) => (
+                    <div key={key} className="flex items-center justify-between gap-4 px-4 py-2.5">
+                      <span className="text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                      <span className="text-[13px] font-medium" style={{ color: 'var(--text)' }}>{String(pdf.fields[key])}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {pdf.fields.allVins.length > 1 && (
+              <p className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
+                Outros VINs no documento: {pdf.fields.allVins.slice(1).join(', ')}
+              </p>
+            )}
+
+            <div>
+              <label className="mb-1.5 block text-[12.5px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                Gravar em qual equipamento?
+              </label>
+              <select value={pdfTarget} onChange={(e) => setPdfTarget(e.target.value)} className="input-apple">
+                <option value="">— Criar novo a partir do documento —</option>
+                {assets.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}{a.plate ? ` · ${a.plate}` : ''}</option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
+                Só são gravados os campos que ainda estiverem vazios no cadastro.
+              </p>
+            </div>
+
+            <button onClick={() => setShowText((v) => !v)} className="btn-ghost w-full py-2 text-[12.5px]">
+              {showText ? 'Ocultar texto extraído' : `Ver texto extraído (${pdf.pages.length} página(s))`}
+            </button>
+            {showText && (
+              <pre
+                className="max-h-[240px] overflow-auto whitespace-pre-wrap rounded-lg px-3.5 py-3 text-[11.5px] leading-relaxed"
+                style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
+              >
+                {pdf.text || '(sem texto)'}
+              </pre>
+            )}
+
+            {result && <ResultBox text={result} />}
+
+            <button
+              onClick={applyPdf}
+              disabled={importing || pdfFilled.length === 0}
+              className="btn-primary w-full py-2.5 text-[13.5px] disabled:opacity-50"
+            >
+              {importing ? 'Gravando…' : 'Gravar dados no equipamento'}
+            </button>
+          </>
+        )}
+
+        {/* ---------- Planilha ---------- */}
+        {sheet && preview && (
+          <>
+            <div className="flex gap-1 rounded-lg p-1" style={{ background: 'var(--bg-secondary)' }}>
+              <ModeTab active={mode === 'assets'} onClick={() => { setMode('assets'); setResult(null); }}>Equipamentos</ModeTab>
+              <ModeTab active={mode === 'items'} onClick={() => { setMode('items'); setResult(null); }}>Itens de estoque</ModeTab>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {sheets.length > 1 && (
+                <div>
+                  <label className="mb-1.5 block text-[12.5px] font-medium" style={{ color: 'var(--text-secondary)' }}>Aba</label>
+                  <select
+                    value={sheetIdx}
+                    onChange={(e) => { setSheetIdx(Number(e.target.value)); setHeaderAuto(true); setResult(null); }}
+                    className="input-apple"
+                  >
+                    {sheets.map((s, i) => <option key={s.name} value={i}>{s.name} ({s.rows.length} linhas)</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="mb-1.5 block text-[12.5px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  Linha do cabeçalho
+                </label>
+                <select
+                  value={headerIndex}
+                  onChange={(e) => { setHeaderAuto(false); setHeaderRow(Number(e.target.value)); setResult(null); }}
+                  className="input-apple"
+                >
+                  {sheet.rows.slice(0, 20).map((r, i) => (
+                    <option key={i} value={i}>
+                      Linha {i + 1}: {r.map((c) => cellText(c).trim()).filter(Boolean).slice(0, 4).join(' | ').slice(0, 48) || '(vazia)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {preview.error ? (
@@ -216,19 +382,36 @@ export default function ImportModal({ open, document: doc, onClose }) {
               </p>
             ) : (
               <>
-                <p className="text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>
-                  Colunas reconhecidas: {Object.entries(preview.cols)
-                    .filter(([, v]) => v != null)
-                    .map(([k]) => k)
-                    .join(', ')}. As demais são ignoradas.
-                </p>
+                <div className="rounded-lg px-3.5 py-3" style={{ background: 'var(--bg-secondary)' }}>
+                  <p className="text-[12.5px]" style={{ color: 'var(--text)' }}>
+                    <strong>{preview.list.length}</strong> linha(s) · colunas lidas:{' '}
+                    {Object.keys(preview.cols).map((k) => fieldLabel(fields, k)).join(', ')}
+                  </p>
+                  {preview.extras.length > 0 && (
+                    <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                      Colunas extras guardadas em Observações: {preview.extras.join(', ')}
+                    </p>
+                  )}
+                </div>
+
+                {mode === 'assets' && (
+                  <label className="flex items-center gap-2.5 text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>
+                    <input
+                      type="checkbox"
+                      checked={updateExisting}
+                      onChange={(e) => setUpdateExisting(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Completar equipamentos que já existem com os campos que estiverem vazios
+                  </label>
+                )}
 
                 <div className="card max-h-[240px] overflow-auto">
                   <table className="tbl">
                     <thead>
                       <tr>
                         {mode === 'assets'
-                          ? <><th>Nome</th><th>Categoria</th><th>Modelo</th><th>Placa</th><th>Equipe</th></>
+                          ? <><th>Nome</th><th>Categoria</th><th>Modelo</th><th>Placa</th><th>VIN</th><th>Equipe</th></>
                           : <><th>Item</th><th className="!text-right">Qtd</th><th className="!text-right">Preço</th><th>Equipe</th></>}
                       </tr>
                     </thead>
@@ -241,6 +424,7 @@ export default function ImportModal({ open, document: doc, onClose }) {
                               <td>{r.tipo || '—'}</td>
                               <td>{r.model || '—'}</td>
                               <td>{r.plate || '—'}</td>
+                              <td className="whitespace-nowrap">{r.vin || '—'}</td>
                               <td>{teams.find((t) => t.id === r.team_id)?.name || 'Yard'}</td>
                             </>
                           ) : (
@@ -263,28 +447,27 @@ export default function ImportModal({ open, document: doc, onClose }) {
               </>
             )}
 
-            {result && (
-              <p className="rounded-lg px-3.5 py-3 text-[13px] font-medium" style={{ background: 'var(--ok-soft)', color: 'var(--ok)' }}>
-                {result}
-              </p>
-            )}
+            {result && <ResultBox text={result} />}
 
-            <div className="flex gap-2">
-              <button onClick={() => { setRows(null); setResult(null); }} className="btn-ghost flex-1 py-2.5 text-[13.5px]">
-                Trocar planilha
-              </button>
-              <button
-                onClick={handleImport}
-                disabled={importing || Boolean(preview.error) || preview.list.length === 0 || Boolean(result)}
-                className="btn-primary flex-1 py-2.5 text-[13.5px]"
-              >
-                {importing ? 'Importando…' : result ? 'Importado' : `Importar ${preview.list.length}`}
-              </button>
-            </div>
+            <button
+              onClick={handleImport}
+              disabled={importing || Boolean(preview.error) || preview.list.length === 0 || Boolean(result)}
+              className="btn-primary w-full py-2.5 text-[13.5px] disabled:opacity-50"
+            >
+              {importing ? 'Importando…' : result ? 'Importado' : `Importar ${preview.list.length}`}
+            </button>
           </>
         )}
       </div>
     </Modal>
+  );
+}
+
+function ResultBox({ text }) {
+  return (
+    <p className="rounded-lg px-3.5 py-3 text-[13px] font-medium" style={{ background: 'var(--ok-soft)', color: 'var(--ok)' }}>
+      {text}
+    </p>
   );
 }
 

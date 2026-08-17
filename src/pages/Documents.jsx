@@ -11,7 +11,8 @@ import ImportModal from '../components/ImportModal';
 import { fmtDateTime } from '../lib/format';
 
 const MAX_MB = 4;
-const SHEET_RE = /\.(xlsx|xlsm|csv)$/i;
+const SHEET_RE = /\.(xlsx|xlsm|xltx|csv|tsv)$/i;
+const READABLE_RE = /\.(xlsx|xlsm|xltx|csv|tsv|pdf)$/i;
 
 function fmtSize(bytes) {
   const n = Number(bytes) || 0;
@@ -79,13 +80,13 @@ export default function Documents() {
     <div>
       <PageHeader
         title="Documentos"
-        subtitle="Guarde PDFs, planilhas e fotos — ou importe uma planilha direto para o sistema"
+        subtitle="Guarde PDFs, planilhas e fotos — e leia os dados deles direto para o sistema"
       >
         <button
           onClick={() => setImportFile('pick')}
           className="btn-ghost flex items-center gap-2 px-3.5 py-2 text-[13px]"
         >
-          <Table size={15} /> Importar planilha
+          <Table size={15} /> Ler planilha ou PDF
         </button>
         <button
           onClick={() => inputRef.current?.click()}
@@ -154,7 +155,7 @@ export default function Documents() {
               <tbody>
                 {documents.map((d) => {
                   const Icon = iconFor(d.name, d.mime);
-                  const isSheet = SHEET_RE.test(d.name);
+                  const readable = READABLE_RE.test(d.name);
                   return (
                     <tr key={d.id}>
                       <td>
@@ -168,8 +169,8 @@ export default function Documents() {
                       <td className="whitespace-nowrap tabular-nums">{fmtDateTime(d.created_at)}</td>
                       <td>
                         <div className="flex items-center justify-end gap-1">
-                          {isSheet && (
-                            <IconBtn title="Importar dados desta planilha" onClick={() => setImportFile(d)}>
+                          {readable && (
+                            <IconBtn title="Ler os dados deste arquivo" onClick={() => setImportFile(d)}>
                               <Table size={13} />
                             </IconBtn>
                           )}

@@ -3,6 +3,16 @@
  * `fields` descreve os inputs específicos que o formulário monta.
  */
 export const MAINTENANCE_TYPES = {
+  manutencao: {
+    label: 'Manutenção geral',
+    color: 'var(--warn)',
+    defaultName: '',
+    nameLabel: 'Resumo do serviço',
+    namePlaceholder: 'Ex: Vazamento no sistema hidráulico',
+    fields: [
+      { key: 'shop', label: 'Oficina / mecânico', placeholder: 'Quem executou' },
+    ],
+  },
   oleo: {
     label: 'Troca de óleo',
     color: 'var(--warn)',
@@ -74,6 +84,28 @@ export const MAINTENANCE_TYPES = {
 
 export function maintenanceType(type) {
   return MAINTENANCE_TYPES[type] || MAINTENANCE_TYPES.peca;
+}
+
+/**
+ * Situação de uma ordem de manutenção.
+ * Registros antigos (sem `status`) contam como concluídos.
+ */
+export const WORK_STATUS = {
+  em_andamento: { value: 'em_andamento', label: 'Em manutenção', color: 'var(--warn)', bg: 'var(--warn-soft)' },
+  concluido: { value: 'concluido', label: 'Pronto', color: 'var(--ok)', bg: 'var(--ok-soft)' },
+};
+
+export function workStatus(entry) {
+  return WORK_STATUS[entry?.status] || WORK_STATUS.concluido;
+}
+
+export function isOpenWork(entry) {
+  return entry?.status === 'em_andamento';
+}
+
+/** Texto do serviço para listas: campo aberto quando existe, senão o resumo. */
+export function workSummary(entry) {
+  return (entry?.work_done || '').trim() || entry?.part_name || maintenanceType(entry?.type).label;
 }
 
 /** Transforma os campos específicos num resumo legível para a tabela. */
