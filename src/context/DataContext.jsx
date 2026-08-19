@@ -3,6 +3,7 @@ import * as store from '../lib/store';
 import { supabaseReady } from '../lib/supabase';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
+import { matchTeamId, splitTeamLabel, teamIndex, teamKey } from '../lib/teams';
 
 const DataContext = createContext(null);
 
@@ -629,7 +630,16 @@ export function DataProvider({ children }) {
    * Categorias da planilha (ex.: "COMPRESSOR") são casadas com as já cadastradas
    * ("Compressor") sem diferenciar maiúsculas; as novas viram categoria de verdade.
    */
-  async function importAssets(rows, { updateExisting = true } = {}) {
+  async function importAssets(rows, { updateExisting = true, createTeams = false } = {}) {
+    let teamCreated = [];
+    let resolvedTeams = new Map();
+    if (createTeams) {
+      const labels = rows.filter((r) => !r.team_id && r.team_label).map((r) => r.team_label);
+      const out = await ensureTeamsByLabel(labels);
+      resolvedTeams = out.resolved;
+      teamCreated = out.created;
+    }
+
     const byName = new Map(assets.map((a) => [(a.name || '').trim().toLowerCase(), a]));
     const byLower = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c.name]));
     const newCategories = [];
@@ -637,9 +647,11 @@ export function DataProvider({ children }) {
     const updated = [];
     let skipped = 0;
 
-    for (const r of rows) {
+    for (const raw of rows) {
+      const { team_label: teamLabelText, ...r } = raw;
       const name = (r.name || '').trim();
       if (!name) continue;
+      if (!r.team_id && teamLabelText) r.team_id = resolvedTeams.get(teamLabelText) || null;
 
       let tipo = (r.tipo || '').trim() || null;
       if (tipo) {
@@ -690,7 +702,86 @@ export function DataProvider({ children }) {
       const patched = new Map(updated.map((a) => [a.id, a]));
       setAssets((prev) => [...prev.map((a) => patched.get(a.id) || a), ...created]);
     }
+    return { created, updated, skipped, teamsCreated: teamCreated };
+  }
+
+  /**
+   * Importa equipes em lote (planilha/PDF).
+   * Casa pelo nome ou pelo código — "Equipe Caio", "PC-038" e "Caio · PC-038"
+   * são a mesma equipe — e completa o código/supervisor de quem já existe.
+   */
+  async function importTeams(rows) {
+    const index = teamIndex(teams);
+    const byId = new Map(teams.map((t) => [t.id, t]));
+    const created = [];
+    const updated = [];
+    let skipped = 0;
+
+    for (const r of rows) {
+      const name = (r.name || '').trim();
+      if (!name) continue;
+      const existingId = matchTeamId(name, index) || (r.code ? matchTeamId(r.code, index) : null);
+
+      if (!existingId) {
+        const row = await store.teamsStore.create({
+          name,
+          code: r.code || null,
+          supervisor: r.supervisor || null,
+        });
+        created.push(row);
+        byId.set(row.id, row);
+        if (row.name) index.set(teamKey(row.name), row.id);
+        if (row.code) index.set(teamKey(row.code), row.id);
+        continue;
+      }
+
+      const current = byId.get(existingId);
+      const patch = {};
+      if (r.code && !current?.code) patch.code = r.code;
+      if (r.supervisor && !current?.supervisor) patch.supervisor = r.supervisor;
+      if (Object.keys(patch).length === 0) {
+        skipped += 1;
+        continue;
+      }
+      const row = await store.teamsStore.update(existingId, patch);
+      byId.set(row.id, row);
+      updated.push(row);
+    }
+
+    if (created.length || updated.length) {
+      const patched = new Map(updated.map((t) => [t.id, t]));
+      setTeams((prev) => [...prev.map((t) => patched.get(t.id) || t), ...created]);
+    }
     return { created, updated, skipped };
+  }
+
+  /**
+   * Garante que existam as equipes citadas numa importação de equipamentos
+   * (coluna "Equipe" ou cabeçalhos de grupo do PDF) e devolve rótulo → id.
+   */
+  async function ensureTeamsByLabel(labels) {
+    const index = teamIndex(teams);
+    const created = [];
+    const resolved = new Map();
+
+    for (const label of labels) {
+      const text = String(label || '').trim();
+      if (!text || resolved.has(text)) continue;
+      const found = matchTeamId(text, index);
+      if (found) {
+        resolved.set(text, found);
+        continue;
+      }
+      const { name, code } = splitTeamLabel(text);
+      const row = await store.teamsStore.create({ name: name || text, code: code || null });
+      created.push(row);
+      if (row.name) index.set(teamKey(row.name), row.id);
+      if (row.code) index.set(teamKey(row.code), row.id);
+      resolved.set(text, row.id);
+    }
+
+    if (created.length) setTeams((prev) => [...prev, ...created]);
+    return { resolved, created };
   }
 
   /** Importa itens de estoque em lote (planilha), somando quando o item já existe na equipe. */
@@ -767,6 +858,8 @@ export function DataProvider({ children }) {
         updateMovementNotes,
         importAssets,
         importItems,
+        importTeams,
+        ensureTeamsByLabel,
         refreshAll,
       }}
     >

@@ -11,6 +11,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import TeamPanel from '../components/TeamPanel';
 import TransferModal from '../components/TransferModal';
 import { fmtUSD } from '../lib/format';
+import { teamLabel } from '../lib/teams';
 
 const YARD = { id: null, name: 'Yard' };
 
@@ -77,7 +78,7 @@ export default function Teams() {
           {teams.map((t, idx) => (
             <TeamCard
               key={t.id}
-              label={t.name}
+              label={teamLabel(t)}
               sub={t.supervisor ? `Supervisor · ${t.supervisor}` : 'Equipe'}
               assetsCount={(assetsByTeam.get(t.id) || []).length}
               itemsCount={(itemsByTeam.get(t.id) || []).length}

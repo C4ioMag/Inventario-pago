@@ -4,10 +4,17 @@ import Modal from './Modal';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 import {
-  ASSET_FIELDS, ITEM_FIELDS, buildAssetRows, buildItemRows,
-  cellText, detectHeaderRow, fieldLabel, normKey,
+  ASSET_FIELDS, ITEM_FIELDS, TEAM_FIELDS, buildAssetRows, buildItemRows, buildTeamRows,
+  cellText, detectHeaderRow, fieldLabel,
 } from '../lib/importMap';
-import { PDF_FIELD_LABELS, extractPdfText, extractVehicleFields } from '../lib/pdfText';
+import { PDF_FIELD_LABELS, extractVehicleFields, readPdf } from '../lib/pdfText';
+import { teamLabel } from '../lib/teams';
+
+const MODES = [
+  { value: 'assets', label: 'Equipamentos', fields: ASSET_FIELDS },
+  { value: 'teams', label: 'Equipes', fields: TEAM_FIELDS },
+  { value: 'items', label: 'Itens de estoque', fields: ITEM_FIELDS },
+];
 
 const PDF_RE = /\.pdf$/i;
 
@@ -40,7 +47,10 @@ function parseDelimited(text) {
 }
 
 export default function ImportModal({ open, document: doc, onClose }) {
-  const { teams, assets, importAssets, importItems, addDocument, updateAsset, ensureAssetByName } = useData();
+  const {
+    teams, assets, importAssets, importItems, importTeams,
+    addDocument, updateAsset, ensureAssetByName,
+  } = useData();
   const { notify } = useToast();
   const inputRef = useRef(null);
 
@@ -51,6 +61,8 @@ export default function ImportModal({ open, document: doc, onClose }) {
   const [headerRow, setHeaderRow] = useState(0);
   const [headerAuto, setHeaderAuto] = useState(true);
   const [updateExisting, setUpdateExisting] = useState(true);
+  const [createTeams, setCreateTeams] = useState(true);
+  const [pdfView, setPdfView] = useState('doc');   // 'doc' (um veículo) | 'table' (lista)
   const [pdf, setPdf] = useState(null);            // { text, fields, pages }
   const [pdfTarget, setPdfTarget] = useState('');
   const [showText, setShowText] = useState(false);
@@ -65,6 +77,7 @@ export default function ImportModal({ open, document: doc, onClose }) {
     setHeaderRow(0);
     setHeaderAuto(true);
     setPdf(null);
+    setPdfView('doc');
     setPdfTarget('');
     setShowText(false);
     setResult(null);
@@ -82,11 +95,18 @@ export default function ImportModal({ open, document: doc, onClose }) {
     setParsing(true);
     try {
       if (PDF_RE.test(fileName)) {
-        const { text, pages } = await extractPdfText(buffer);
+        // o mesmo arquivo é lido de dois jeitos: como documento de um veículo
+        // e como tabela (lista de equipes/equipamentos)
+        const { text, pages, rows } = await readPdf(buffer);
         if (!text.trim()) {
           notify('Esse PDF não tem texto selecionável (parece digitalizado). Digite os dados manualmente.', 'error');
         }
         setPdf({ text, pages, fields: extractVehicleFields(text) });
+        setSheets(rows.length ? [{ name: 'PDF', rows }] : []);
+        setSheetIdx(0);
+        setHeaderAuto(true);
+        // com muitas linhas e colunas, é lista — abre já na aba certa
+        setPdfView(rows.length >= 3 && rows.some((r) => r.filter(Boolean).length >= 3) ? 'table' : 'doc');
         setFile({ name: fileName });
         return;
       }
@@ -148,7 +168,7 @@ export default function ImportModal({ open, document: doc, onClose }) {
   }
 
   const sheet = sheets[sheetIdx];
-  const fields = mode === 'assets' ? ASSET_FIELDS : ITEM_FIELDS;
+  const fields = MODES.find((m) => m.value === mode).fields;
 
   const detected = useMemo(
     () => (sheet ? detectHeaderRow(sheet.rows, fields) : 0),
@@ -156,24 +176,30 @@ export default function ImportModal({ open, document: doc, onClose }) {
   );
   const headerIndex = headerAuto ? detected : Math.min(headerRow, (sheet?.rows.length || 1) - 1);
 
-  const teamByName = useMemo(() => new Map(teams.map((t) => [normKey(t.name), t.id])), [teams]);
-
   const preview = useMemo(() => {
     if (!sheet) return null;
     const headers = (sheet.rows[headerIndex] || []).map((c) => cellText(c).trim());
     const data = sheet.rows.slice(headerIndex + 1);
-    const build = mode === 'assets' ? buildAssetRows : buildItemRows;
-    return { ...build({ headers, data, teamByName }), headers };
-  }, [sheet, headerIndex, mode, teamByName]);
+    const build = mode === 'assets' ? buildAssetRows : mode === 'teams' ? buildTeamRows : buildItemRows;
+    return { ...build({ headers, data, teams }), headers };
+  }, [sheet, headerIndex, mode, teams]);
 
   async function handleImport() {
     setImporting(true);
     try {
       if (mode === 'assets') {
-        const { created, updated, skipped } = await importAssets(preview.list, { updateExisting });
+        const { created, updated, skipped, teamsCreated } = await importAssets(preview.list, { updateExisting, createTeams });
         setResult([
           `${created.length} equipamento(s) criado(s)`,
           updated.length ? `${updated.length} atualizado(s) com dados novos` : null,
+          teamsCreated?.length ? `${teamsCreated.length} equipe(s) criada(s)` : null,
+          skipped ? `${skipped} sem mudança` : null,
+        ].filter(Boolean).join(' · '));
+      } else if (mode === 'teams') {
+        const { created, updated, skipped } = await importTeams(preview.list);
+        setResult([
+          `${created.length} equipe(s) criada(s)`,
+          updated.length ? `${updated.length} completada(s)` : null,
           skipped ? `${skipped} sem mudança` : null,
         ].filter(Boolean).join(' · '));
       } else {
@@ -229,7 +255,7 @@ export default function ImportModal({ open, document: doc, onClose }) {
       open={open}
       onClose={onClose}
       title="Importar documento"
-      subtitle="Planilha (.xlsx/.csv) para criar equipamentos e itens, ou PDF para ler os dados do veículo"
+      subtitle="Planilha ou PDF — cria equipes, equipamentos e itens em lote, ou lê os dados de um documento do veículo"
       maxWidth={640}
     >
       <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
@@ -268,8 +294,19 @@ export default function ImportModal({ open, document: doc, onClose }) {
           </div>
         )}
 
-        {/* ---------- PDF ---------- */}
+        {/* ---------- PDF: escolha entre documento de um veículo ou lista ---------- */}
         {pdf && (
+          <div className="flex gap-1 rounded-lg p-1" style={{ background: 'var(--bg-secondary)' }}>
+            <ModeTab active={pdfView === 'doc'} onClick={() => { setPdfView('doc'); setResult(null); }}>
+              Documento de um veículo
+            </ModeTab>
+            <ModeTab active={pdfView === 'table'} onClick={() => { setPdfView('table'); setResult(null); }}>
+              Lista / tabela {sheets[0]?.rows.length ? `(${sheets[0].rows.length} linhas)` : ''}
+            </ModeTab>
+          </div>
+        )}
+
+        {pdf && pdfView === 'doc' && (
           <>
             <div className="card overflow-hidden">
               <div className="border-b px-4 py-2.5" style={{ borderColor: 'var(--border)' }}>
@@ -337,12 +374,21 @@ export default function ImportModal({ open, document: doc, onClose }) {
           </>
         )}
 
-        {/* ---------- Planilha ---------- */}
-        {sheet && preview && (
+        {/* ---------- Planilha (e PDF em modo lista) ---------- */}
+        {sheet && preview && (!pdf || pdfView === 'table') && (
           <>
+            {pdf && sheets[0]?.rows.length === 0 && (
+              <p className="rounded-lg px-3.5 py-3 text-[13px]" style={{ background: 'var(--warn-soft)', color: 'var(--warn)' }}>
+                Não consegui montar uma tabela desse PDF.
+              </p>
+            )}
+
             <div className="flex gap-1 rounded-lg p-1" style={{ background: 'var(--bg-secondary)' }}>
-              <ModeTab active={mode === 'assets'} onClick={() => { setMode('assets'); setResult(null); }}>Equipamentos</ModeTab>
-              <ModeTab active={mode === 'items'} onClick={() => { setMode('items'); setResult(null); }}>Itens de estoque</ModeTab>
+              {MODES.map((m) => (
+                <ModeTab key={m.value} active={mode === m.value} onClick={() => { setMode(m.value); setResult(null); }}>
+                  {m.label}
+                </ModeTab>
+              ))}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -394,44 +440,77 @@ export default function ImportModal({ open, document: doc, onClose }) {
                   )}
                 </div>
 
+                {preview.groups?.length > 0 && (
+                  <p className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                    Equipes reconhecidas como título de grupo: {preview.groups.join(' · ')} — os
+                    equipamentos listados abaixo de cada título entram nela.
+                  </p>
+                )}
+
                 {mode === 'assets' && (
-                  <label className="flex items-center gap-2.5 text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>
-                    <input
-                      type="checkbox"
-                      checked={updateExisting}
-                      onChange={(e) => setUpdateExisting(e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    Completar equipamentos que já existem com os campos que estiverem vazios
-                  </label>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2.5 text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>
+                      <input
+                        type="checkbox"
+                        checked={updateExisting}
+                        onChange={(e) => setUpdateExisting(e.target.checked)}
+                        className="h-4 w-4"
+                      />
+                      Completar equipamentos que já existem com os campos que estiverem vazios
+                    </label>
+                    <label className="flex items-center gap-2.5 text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>
+                      <input
+                        type="checkbox"
+                        checked={createTeams}
+                        onChange={(e) => setCreateTeams(e.target.checked)}
+                        className="h-4 w-4"
+                      />
+                      Criar as equipes que ainda não existirem (nome e código, ex.: Caio · PC-038)
+                    </label>
+                  </div>
                 )}
 
                 <div className="card max-h-[240px] overflow-auto">
                   <table className="tbl">
                     <thead>
                       <tr>
-                        {mode === 'assets'
-                          ? <><th>Nome</th><th>Categoria</th><th>Modelo</th><th>Placa</th><th>VIN</th><th>Equipe</th></>
-                          : <><th>Item</th><th className="!text-right">Qtd</th><th className="!text-right">Preço</th><th>Equipe</th></>}
+                        {mode === 'assets' && <><th>Nome</th><th>Categoria</th><th>Modelo</th><th>Placa</th><th>VIN</th><th>Equipe</th></>}
+                        {mode === 'teams' && <><th>Equipe</th><th>Código</th><th>Supervisor</th></>}
+                        {mode === 'items' && <><th>Item</th><th className="!text-right">Qtd</th><th className="!text-right">Preço</th><th>Equipe</th></>}
                       </tr>
                     </thead>
                     <tbody>
                       {preview.list.slice(0, 40).map((r, i) => (
                         <tr key={i}>
                           <td className="cell-strong">{r.name}</td>
-                          {mode === 'assets' ? (
+                          {mode === 'assets' && (
                             <>
                               <td>{r.tipo || '—'}</td>
                               <td>{r.model || '—'}</td>
                               <td>{r.plate || '—'}</td>
                               <td className="whitespace-nowrap">{r.vin || '—'}</td>
-                              <td>{teams.find((t) => t.id === r.team_id)?.name || 'Yard'}</td>
+                              <td>
+                                {r.team_id
+                                  ? teamLabel(teams.find((t) => t.id === r.team_id))
+                                  : r.team_label
+                                    ? <span style={{ color: createTeams ? 'var(--accent)' : 'var(--warn)' }}>
+                                        {r.team_label}{createTeams ? ' (nova)' : ' (não encontrada)'}
+                                      </span>
+                                    : 'Yard'}
+                              </td>
                             </>
-                          ) : (
+                          )}
+                          {mode === 'teams' && (
+                            <>
+                              <td className="whitespace-nowrap">{r.code || '—'}</td>
+                              <td>{r.supervisor || '—'}</td>
+                            </>
+                          )}
+                          {mode === 'items' && (
                             <>
                               <td className="text-right tabular-nums">{r.quantity}</td>
                               <td className="text-right tabular-nums">{r.unitPrice || '—'}</td>
-                              <td>{teams.find((t) => t.id === r.teamId)?.name || 'Yard'}</td>
+                              <td>{r.teamId ? teamLabel(teams.find((t) => t.id === r.teamId)) : 'Yard'}</td>
                             </>
                           )}
                         </tr>
@@ -454,7 +533,8 @@ export default function ImportModal({ open, document: doc, onClose }) {
               disabled={importing || Boolean(preview.error) || preview.list.length === 0 || Boolean(result)}
               className="btn-primary w-full py-2.5 text-[13.5px] disabled:opacity-50"
             >
-              {importing ? 'Importando…' : result ? 'Importado' : `Importar ${preview.list.length}`}
+              {importing ? 'Importando…' : result ? 'Importado'
+                : `Importar ${preview.list.length} ${mode === 'teams' ? 'equipe(s)' : mode === 'items' ? 'item(ns)' : 'equipamento(s)'}`}
             </button>
           </>
         )}

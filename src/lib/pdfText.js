@@ -28,35 +28,153 @@ export function dataUrlToBytes(dataUrl) {
   return bytes;
 }
 
-/** Texto de todas as páginas. Devolve `{ pages: string[], text }`. */
-export async function extractPdfText(source) {
+/**
+ * Abre o PDF e devolve as linhas de cada página já reconstruídas.
+ *
+ * O pdf.js assume a posse do buffer que recebe, então cada leitura usa uma
+ * cópia — assim o mesmo arquivo pode ser lido de novo pelo chamador.
+ */
+async function readLines(source) {
   const pdfjs = await loadPdfjs();
-  const data = typeof source === 'string' ? dataUrlToBytes(source) : new Uint8Array(source);
-  const doc = await pdfjs.getDocument({ data, isEvalSupported: false }).promise;
+  const bytes = typeof source === 'string' ? dataUrlToBytes(source) : new Uint8Array(source);
+  const doc = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
 
-  const pages = [];
+  const lines = [];   // { page, y, parts: [{ x, str }] }
   for (let n = 1; n <= doc.numPages; n++) {
     const page = await doc.getPage(n);
     const content = await page.getTextContent();
-    // Reconstrói as linhas pela posição vertical de cada trecho
-    const lines = new Map();
+    const byY = new Map();
     for (const item of content.items) {
-      if (!item.str) continue;
-      const y = Math.round(item.transform[5]);
-      const line = lines.get(y) || [];
-      line.push({ x: item.transform[4], str: item.str });
-      lines.set(y, line);
+      if (!item.str || !item.str.trim()) continue;
+      // arredonda a altura: trechos da mesma linha raramente batem no pixel
+      const y = Math.round(item.transform[5] / 3) * 3;
+      const parts = byY.get(y) || [];
+      parts.push({ x: item.transform[4], width: item.width || item.str.length * 4, str: item.str.trim() });
+      byY.set(y, parts);
     }
-    const text = [...lines.entries()]
-      .sort((a, b) => b[0] - a[0])
-      .map(([, parts]) => parts.sort((a, b) => a.x - b.x).map((p) => p.str).join(' ').replace(/\s+/g, ' ').trim())
-      .filter(Boolean)
-      .join('\n');
-    pages.push(text);
+    for (const [y, parts] of byY) {
+      lines.push({ page: n, y, parts: parts.sort((a, b) => a.x - b.x) });
+    }
   }
   await doc.destroy();
 
-  return { pages, text: pages.join('\n\n') };
+  lines.sort((a, b) => a.page - b.page || b.y - a.y);
+  return { lines, pageCount: Math.max(1, lines.reduce((m, l) => Math.max(m, l.page), 0)) };
+}
+
+/** Texto corrido por página, na ordem de leitura. */
+function linesToPages(lines, pageCount) {
+  const pages = Array.from({ length: pageCount }, () => []);
+  for (const line of lines) {
+    pages[line.page - 1].push(line.parts.map((p) => p.str).join(' ').replace(/\s+/g, ' ').trim());
+  }
+  return pages.map((rows) => rows.filter(Boolean).join('\n'));
+}
+
+/**
+ * Lê o PDF de uma vez só e devolve as duas visões do mesmo arquivo:
+ * o texto (para documentos de um veículo) e a tabela (para listas).
+ */
+export async function readPdf(source) {
+  const { lines, pageCount } = await readLines(source);
+  const pages = linesToPages(lines, pageCount);
+  return { pages, text: pages.join('\n\n'), rows: rowsFromLines(lines) };
+}
+
+/** Texto de todas as páginas. Devolve `{ pages: string[], text }`. */
+export async function extractPdfText(source) {
+  const { pages, text } = await readPdf(source);
+  return { pages, text };
+}
+
+/**
+ * Lê o PDF como tabela: cada linha vira um array de células.
+ * Listas de frota e de equipes exportadas em PDF não têm tabela de verdade
+ * dentro do arquivo — as colunas são deduzidas das posições horizontais.
+ */
+export async function extractPdfRows(source) {
+  const { rows } = await readPdf(source);
+  return { rows, columns: rows.reduce((m, r) => Math.max(m, r.length), 0) };
+}
+
+/**
+ * Corta as linhas em células usando as faixas verticais que ficam em branco
+ * no documento inteiro. É assim que se enxerga a coluna de um PDF: não existe
+ * tabela dentro do arquivo, só texto posicionado — o que separa uma coluna da
+ * outra é o corredor de espaço que nenhuma linha ocupa.
+ */
+export function rowsFromLines(lines) {
+  const boundaries = columnBoundaries(lines);
+  return lines.map((line) => {
+    const cells = new Array(boundaries.length + 1).fill('');
+    for (const part of line.parts) {
+      let col = 0;
+      // a célula é escolhida pelo início do trecho
+      while (col < boundaries.length && part.x >= boundaries[col]) col++;
+      cells[col] = cells[col] ? `${cells[col]} ${part.str}` : part.str;
+    }
+    return cells.map((c) => c.trim());
+  }).filter((cells) => cells.some(Boolean));
+}
+
+/** Quantos blocos de texto separados a linha tem (palavras coladas contam como um). */
+function blockCount(line) {
+  let blocks = 0;
+  let end = -Infinity;
+  for (const part of line.parts) {
+    if (part.x - end > MIN_GAP) blocks++;
+    end = Math.max(end, part.x + Math.max(part.width, 1));
+  }
+  return blocks;
+}
+
+const BIN = 2;              // resolução da varredura horizontal, em pontos
+const MIN_GAP = 6;          // corredor menor que isso é espaço entre palavras
+const MAX_COLUMNS = 24;
+
+export function columnBoundaries(lines) {
+  if (lines.length < 3) return [];
+
+  // Títulos e cabeçalhos de grupo são uma faixa de texto só e atravessam
+  // várias colunas — se contassem, fechariam os corredores das linhas reais.
+  const tableLines = lines.filter((line) => blockCount(line) >= 2);
+  if (tableLines.length < 2) return [];
+
+  // Quantas linhas ocupam cada faixa horizontal do documento
+  const occupancy = new Map();
+  let maxBin = 0;
+  for (const line of tableLines) {
+    const bins = new Set();
+    for (const part of line.parts) {
+      const from = Math.floor(part.x / BIN);
+      const to = Math.ceil((part.x + Math.max(part.width, 1)) / BIN);
+      for (let b = from; b < to; b++) bins.add(b);
+      if (to > maxBin) maxBin = to;
+    }
+    for (const b of bins) occupancy.set(b, (occupancy.get(b) || 0) + 1);
+  }
+
+  // Uma linha desalinhada isolada não deve fechar um corredor sozinha
+  const noise = tableLines.length >= 8 ? 1 : 0;
+  const firstUsed = Math.min(...occupancy.keys());
+
+  const boundaries = [];
+  let gapStart = null;
+  for (let b = firstUsed; b <= maxBin; b++) {
+    const busy = (occupancy.get(b) || 0) > noise;
+    if (!busy) {
+      if (gapStart == null) gapStart = b;
+      continue;
+    }
+    if (gapStart != null) {
+      const gapWidth = (b - gapStart) * BIN;
+      // a divisa fica no fim do corredor, onde a próxima coluna começa
+      if (gapWidth >= MIN_GAP) boundaries.push(b * BIN);
+      gapStart = null;
+    }
+  }
+
+  return boundaries.slice(0, MAX_COLUMNS);
 }
 
 const VIN_RE = /\b[A-HJ-NPR-Z0-9]{17}\b/g;

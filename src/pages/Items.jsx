@@ -12,6 +12,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import TransferModal from '../components/TransferModal';
 import { exportInventoryPDF, exportInvoicePDF } from '../lib/pdf';
 import { fmtUSD } from '../lib/format';
+import { teamLabel } from '../lib/teams';
 
 export default function Items() {
   const {
@@ -88,7 +89,7 @@ export default function Items() {
         <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="input-apple w-auto min-w-[150px]">
           <option value="all">Todas as equipes</option>
           <option value="none">Yard (geral)</option>
-          {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          {teams.map((t) => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
         </select>
       </div>
 

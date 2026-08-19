@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
+import { teamLabel } from '../lib/teams';
 
 export default function TeamFormModal({ open, onClose, onSubmit, team }) {
   const [name, setName] = useState('');
+  const [code, setCode] = useState('');
   const [supervisor, setSupervisor] = useState('');
   const [saving, setSaving] = useState(false);
   const isEdit = Boolean(team);
@@ -10,6 +12,7 @@ export default function TeamFormModal({ open, onClose, onSubmit, team }) {
   useEffect(() => {
     if (!open) return;
     setName(team?.name || '');
+    setCode(team?.code || '');
     setSupervisor(team?.supervisor || '');
   }, [open, team]);
 
@@ -17,7 +20,11 @@ export default function TeamFormModal({ open, onClose, onSubmit, team }) {
     e.preventDefault();
     setSaving(true);
     try {
-      await onSubmit({ name: name.trim(), supervisor: supervisor.trim() || null });
+      await onSubmit({
+        name: name.trim(),
+        code: code.trim() || null,
+        supervisor: supervisor.trim() || null,
+      });
       onClose();
     } finally {
       setSaving(false);
@@ -37,7 +44,23 @@ export default function TeamFormModal({ open, onClose, onSubmit, team }) {
           <label className="mb-1.5 block text-[12.5px] font-medium" style={{ color: 'var(--text-secondary)' }}>
             Nome da equipe
           </label>
-          <input required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Abenamar" className="input-apple" />
+          <input required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Caio" className="input-apple" />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-[12.5px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+            Código no sistema (opcional)
+          </label>
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="Ex: PC-038"
+            className="input-apple uppercase"
+          />
+          <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
+            {name.trim() || code.trim()
+              ? <>A equipe vai aparecer como <strong>{teamLabel({ name: name.trim() || '—', code: code.trim() })}</strong>.</>
+              : 'Use o mesmo código do sistema — planilhas e PDFs também são casados por ele.'}
+          </p>
         </div>
         <div>
           <label className="mb-1.5 block text-[12.5px] font-medium" style={{ color: 'var(--text-secondary)' }}>

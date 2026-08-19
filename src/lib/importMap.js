@@ -1,3 +1,5 @@
+import { matchTeamId, splitTeamLabel, teamIndex, teamKey } from './teams';
+
 /**
  * Leitura de planilhas — dicionário de colunas, detecção do cabeçalho e
  * conversão de células.
@@ -94,6 +96,13 @@ export function toStatus(raw) {
   }
   return null;
 }
+
+/** Campos de uma lista de equipes. */
+export const TEAM_FIELDS = [
+  { key: 'name', label: 'Equipe', aliases: ['equipe', 'team', 'crew', 'turma', 'nome', 'name', 'grupo', 'squad'] },
+  { key: 'code', label: 'Código', aliases: ['codigo', 'code', 'sigla', 'numero', 'number', 'id', 'teamcode', 'crewcode'] },
+  { key: 'supervisor', label: 'Supervisor', aliases: ['supervisor', 'responsavel', 'lider', 'leader', 'foreman', 'encarregado'] },
+];
 
 /**
  * Campos de equipamento reconhecidos.
@@ -196,8 +205,23 @@ function extrasText(headers, row, extras) {
     .join(' · ');
 }
 
+/**
+ * Uma linha com uma única célula preenchida no meio da lista costuma ser um
+ * cabeçalho de grupo ("EQUIPE CAIO — PC-038"): os equipamentos abaixo dela
+ * pertencem a essa equipe. Só vale quando a planilha não tem coluna de equipe.
+ */
+function groupHeaderTeam(row) {
+  const filled = row.map(cellText).map((v) => v.trim()).filter(Boolean);
+  if (filled.length !== 1) return null;
+  const text = filled[0];
+  if (text.length > 60) return null;
+  if (/^(equipe|team|crew|turma)\b/i.test(text)) return text;
+  return null;
+}
+
 /** Converte a matriz da planilha em equipamentos prontos para o banco. */
-export function buildAssetRows({ headers, data, teamByName }) {
+export function buildAssetRows({ headers, data, teams = [] }) {
+  const index = teamIndex(teams);
   const { cols, extras } = matchColumns(headers, ASSET_FIELDS);
   if (cols.name == null) {
     return {
@@ -209,11 +233,25 @@ export function buildAssetRows({ headers, data, teamByName }) {
   }
 
   const list = [];
+  const groups = new Set();
+  let currentGroup = null;
+
   for (const row of data) {
     const get = (f) => (cols[f] == null ? '' : cellText(row[cols[f]]).trim());
+
+    if (cols.team == null) {
+      const header = groupHeaderTeam(row);
+      if (header) {
+        currentGroup = header;
+        groups.add(header);
+        continue;
+      }
+    }
+
     const name = get('name');
     if (!name) continue;
 
+    const teamText = get('team') || currentGroup || '';
     const extra = extrasText(headers, row, extras);
     const notes = [get('notes'), extra].filter(Boolean).join(' · ') || null;
 
@@ -236,15 +274,49 @@ export function buildAssetRows({ headers, data, teamByName }) {
       samsung: get('samsung') || null,
       e_pass: get('e_pass') || null,
       notes,
-      team_id: teamByName.get(normKey(get('team'))) || null,
+      team_id: matchTeamId(teamText, index),
+      team_label: teamText || null,
     });
   }
 
-  return { list, cols, extras: extras.map((i) => String(headers[i] ?? '').trim()).filter(Boolean) };
+  return {
+    list,
+    cols,
+    groups: [...groups],
+    extras: extras.map((i) => String(headers[i] ?? '').trim()).filter(Boolean),
+  };
+}
+
+/** Converte a matriz em equipes (nome, código e supervisor). */
+export function buildTeamRows({ headers, data }) {
+  const { cols } = matchColumns(headers, TEAM_FIELDS);
+  if (cols.name == null) {
+    return { error: 'Não achei a coluna com o nome da equipe. Renomeie a coluna para "Equipe", "Nome" ou "Crew".', list: [], cols, extras: [] };
+  }
+
+  const seen = new Set();
+  const list = [];
+  for (const row of data) {
+    const get = (f) => (cols[f] == null ? '' : cellText(row[cols[f]]).trim());
+    const raw = get('name');
+    if (!raw) continue;
+    // Sem coluna de código, "Equipe Caio, PC-038" numa coluna só já vira nome + código
+    const split = splitTeamLabel(raw);
+    const hasCodeColumn = cols.code != null && get('code');
+    const name = (hasCodeColumn ? raw.replace(/^\s*(equipe|team|crew|turma)\s*[:\-–]?\s*/i, '').trim() : split.name) || raw;
+    const code = get('code') || (hasCodeColumn ? null : split.code) || null;
+    const key = teamKey(`${name}${code || ''}`);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push({ name, code, supervisor: get('supervisor') || null });
+  }
+
+  return { list, cols, extras: [] };
 }
 
 /** Converte a matriz da planilha em itens de estoque. */
-export function buildItemRows({ headers, data, teamByName }) {
+export function buildItemRows({ headers, data, teams = [] }) {
+  const index = teamIndex(teams);
   const { cols, extras } = matchColumns(headers, ITEM_FIELDS);
   if (cols.name == null) {
     return {
@@ -265,7 +337,8 @@ export function buildItemRows({ headers, data, teamByName }) {
       quantity: toNumber(get('quantity')) ?? 0,
       unitPrice: toNumber(get('unitPrice')) ?? 0,
       minQuantity: toNumber(get('minQuantity')) ?? 0,
-      teamId: teamByName.get(normKey(get('team'))) || null,
+      teamId: matchTeamId(get('team'), index),
+      team_label: get('team') || null,
     });
   }
 
