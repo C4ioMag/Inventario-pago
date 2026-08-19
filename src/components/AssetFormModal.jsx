@@ -3,6 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import Modal from './Modal';
 import { MAINTENANCE_TYPES, oilStatus, fmtNum } from '../lib/maintenance';
 import { fmtDate } from '../lib/format';
+import { teamLabel } from '../lib/teams';
 
 const BLANK = {
   tipo: '', name: '', model: '', year: '', plate: '', vin: '',
@@ -137,7 +138,7 @@ export default function AssetFormModal({ open, onClose, onSubmit, asset, teams, 
             <Field label="Equipe">
               <select value={form.team_id} onChange={set('team_id')} className="input-apple">
                 <option value="">Yard (sem equipe)</option>
-                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {teams.map((t) => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
               </select>
             </Field>
             <Field label="Status">

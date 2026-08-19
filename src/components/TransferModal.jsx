@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import Modal from './Modal';
+import { teamLabel } from '../lib/teams';
 
 /**
  * Transferência entre equipes/yard.
@@ -63,7 +64,7 @@ export default function TransferModal({ open, onClose, onSubmit, entity, kind, t
           <select value={toTeamId} onChange={(e) => setToTeamId(e.target.value)} className="input-apple">
             <option value="" disabled={currentTeamId === ''}>Yard (geral)</option>
             {teams.map((t) => (
-              <option key={t.id} value={t.id} disabled={t.id === currentTeamId}>{t.name}</option>
+              <option key={t.id} value={t.id} disabled={t.id === currentTeamId}>{teamLabel(t)}</option>
             ))}
           </select>
         </div>

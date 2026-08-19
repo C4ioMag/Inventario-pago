@@ -26,7 +26,10 @@ Sistema de controle de inventário, equipes e frota (Power Connect USA).
   peça ou mecânico. Ao abrir uma manutenção o equipamento passa para o status "Manutenção";
   ao concluir (com data, complemento do serviço e custo) ele volta para "Disponível".
   Todo registro fica no histórico do equipamento e pode ser editado, reaberto ou excluído.
-- *Equipes*: clicar no card abre o painel com dois acessos — ver seus **equipamentos** e ver
+- *Equipes*: cada equipe tem **nome e código do sistema** (ex.: `Caio · PC-038`) — o código
+  é opcional, aparece junto do nome em todo o app e também serve para casar as equipes ao
+  importar planilhas e PDFs ("Equipe Caio", "PC-038" e "Caio · PC-038" são a mesma equipe).
+  Clicar no card abre o painel com dois acessos — ver seus **equipamentos** e ver
   seus **itens**. Dá para transferir de lá mesmo, editar nome e supervisor, e excluir
   (nada é perdido: volta para o Yard). Buscar o nome da equipe no topo abre o painel direto.
 
@@ -41,10 +44,22 @@ direto para o sistema:
   perde**: as que o sistema não conhece são guardadas em Observações no formato `Coluna: valor`.
   Importar de novo **completa** os equipamentos que já existem com os campos que estavam
   vazios, sem apagar nada.
-- *PDFs*: registration, título, seguro ou inspeção são lidos e o sistema reconhece VIN, placa,
-  ano, modelo, proprietário, validade e odômetro — você confere na tela e escolhe em qual
-  equipamento gravar (só entram os campos que ainda estiverem vazios). O texto extraído pode
-  ser visto por inteiro. PDFs digitalizados (imagem pura) não têm texto para ler e avisam isso.
+- *PDFs*: o mesmo arquivo é lido de dois jeitos, escolhidos em abas.
+  - **Documento de um veículo** (registration, título, seguro, inspeção): reconhece VIN, placa,
+    ano, modelo, proprietário, validade e odômetro — você confere na tela e escolhe em qual
+    equipamento gravar (só entram os campos ainda vazios).
+  - **Lista / tabela** (a frota inteira, ou as equipes, num PDF só): as colunas são deduzidas
+    pelos corredores de espaço em branco da página, e daí em diante vale tudo o que a planilha
+    tem — cabeçalho automático, mesmos nomes de coluna, colunas extras em Observações.
+    Um título de grupo no meio da lista (ex.: `EQUIPE CAIO — PC-038`) é entendido como a
+    equipe dos equipamentos listados abaixo dele.
+
+  O texto extraído pode ser visto por inteiro. PDFs digitalizados (imagem pura) não têm texto
+  para ler e avisam isso.
+- *Equipes em lote*: além de equipamentos e itens, a importação tem o modo **Equipes** — cria
+  as equipes com nome, código e supervisor. Ao importar equipamentos, as equipes citadas que
+  ainda não existirem podem ser criadas junto (`Equipe Caio, PC-038` vira a equipe
+  `Caio · PC-038`), e nada é sobrescrito no que já estava cadastrado.
 
 **Categorias** — os tipos de equipamento (Truck, Trailer, Vacuum…), com atalho para
 cadastrar os padrões da frota de uma vez.
