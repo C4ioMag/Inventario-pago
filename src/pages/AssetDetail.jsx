@@ -10,7 +10,7 @@ import TransferModal from '../components/TransferModal';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
 import AssetDocuments from '../components/AssetDocuments';
-import { fmtDate, fmtDateTime, fmtUSD } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtUSD, yesNo } from '../lib/format';
 import { movementKind } from '../lib/movements';
 import { describeDetails, fmtNum, isOpenWork, maintenanceType, oilStatus, workStatus } from '../lib/maintenance';
 
@@ -82,7 +82,7 @@ export default function AssetDetail() {
     ['Odômetro atual', asset.odometer != null ? fmtNum(asset.odometer) : null],
     ['Verizon', asset.verizon],
     ['Bouncie', asset.bouncie],
-    ['Samsung', asset.samsung],
+    ['Samsung (GPS)', yesNo(asset.samsung)],
     ['E-ZPass', asset.e_pass],
   ];
 

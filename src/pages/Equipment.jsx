@@ -8,7 +8,7 @@ import EmptyState from '../components/EmptyState';
 import AssetFormModal from '../components/AssetFormModal';
 import TransferModal from '../components/TransferModal';
 import { oilStatus, fmtNum } from '../lib/maintenance';
-import { teamLabel } from '../lib/teams';
+import TeamOptions from '../components/TeamOptions';
 
 export default function Equipment() {
   const navigate = useNavigate();
@@ -64,7 +64,7 @@ export default function Equipment() {
         <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="input-apple w-auto min-w-[140px]">
           <option value="all">Todas as equipes</option>
           <option value="none">Yard</option>
-          {teams.map((t) => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
+          <TeamOptions teams={teams} />
         </select>
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="input-apple w-auto min-w-[130px]">
           <option value="all">Todas as categorias</option>

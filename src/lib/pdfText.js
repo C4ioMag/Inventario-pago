@@ -232,6 +232,10 @@ function labelled(text, labels) {
  */
 export function extractVehicleFields(text) {
   const vins = findVins(text);
+  // VIN escrito com espaços ("1HTM MAAL 57H5 42831") não casa com a busca solta
+  const labelledVin = labelled(text, ['vin number', 'vin', 'chassi', 'chassis', 'numero de serie']);
+  const cleanedVin = labelledVin ? labelledVin.replace(/[^A-Za-z0-9]/g, '').toUpperCase() : null;
+  if (cleanedVin && cleanedVin.length === 17 && !vins.includes(cleanedVin)) vins.unshift(cleanedVin);
   const yearMatch = labelled(text, ['ano', 'year', 'model year', 'yr']);
   const year = (yearMatch && yearMatch.match(/(19|20)\d{2}/)?.[0])
     || text.match(/\b(19[89]\d|20[0-4]\d)\b/)?.[0]
@@ -240,27 +244,49 @@ export function extractVehicleFields(text) {
   const odometerRaw = labelled(text, ['odometer', 'odometro', 'odômetro', 'mileage', 'milhagem', 'miles', 'hour meter', 'hourmeter', 'horimetro']);
   const odometer = odometerRaw ? Number(String(odometerRaw).replace(/[^\d]/g, '')) || null : null;
 
+  const samsung = labelled(text, ['samsung', 'gps', 'rastreador', 'tracker']);
+
   return {
     vin: vins[0] || null,
     allVins: vins,
+    name: labelled(text, ['unit', 'unidade', 'equipamento', 'codigo', 'código', 'truck', 'veiculo', 'veículo', 'asset']),
     plate: labelled(text, ['placa', 'plate', 'license plate', 'plate no', 'tag']),
     year,
     model: labelled(text, ['modelo', 'model', 'make/model', 'make']),
     owner: labelled(text, ['owner', 'proprietario', 'proprietário', 'registered owner', 'titular']),
+    supervisor: labelled(text, ['supervisor', 'responsavel', 'responsável', 'driver', 'motorista']),
+    team: labelled(text, ['equipe', 'team', 'crew']),
+    verizon: labelled(text, ['verizon', 'verizon connect']),
+    bouncie: labelled(text, ['bouncie', 'bounce']),
+    samsung: samsung ? toYesNoText(samsung) : null,
+    e_pass: labelled(text, ['e-zpass', 'ezpass', 'e z pass', 'epass', 'sunpass', 'pedagio', 'pedágio', 'toll', 'transponder']),
     expires: labelled(text, ['expira', 'expires', 'expiration', 'valid until', 'validade']),
     policy: labelled(text, ['policy', 'apolice', 'apólice', 'policy number']),
     odometer,
   };
 }
 
+/** No documento, o Samsung é só "tem ou não tem" GPS. */
+function toYesNoText(raw) {
+  const v = String(raw).trim().toLowerCase();
+  return ['nao', 'não', 'no', 'n', 'false', '0', '-', 'sem'].includes(v) ? 'Não' : 'Sim';
+}
+
 /** Campos preenchidos, prontos para listar na tela. */
 export const PDF_FIELD_LABELS = {
+  name: 'Unidade / código',
   vin: 'VIN',
   plate: 'Placa',
   year: 'Ano',
   model: 'Modelo / Marca',
   owner: 'Proprietário',
+  supervisor: 'Supervisor',
+  team: 'Equipe',
+  odometer: 'Odômetro',
+  verizon: 'Verizon',
+  bouncie: 'Bouncie',
+  samsung: 'Samsung (GPS)',
+  e_pass: 'E-ZPass',
   expires: 'Validade',
   policy: 'Apólice / documento',
-  odometer: 'Odômetro',
 };

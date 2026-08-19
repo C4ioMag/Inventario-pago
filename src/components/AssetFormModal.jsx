@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import Modal from './Modal';
 import { MAINTENANCE_TYPES, oilStatus, fmtNum } from '../lib/maintenance';
+import { yesNo } from '../lib/format';
 import { fmtDate } from '../lib/format';
-import { teamLabel } from '../lib/teams';
+import TeamOptions from './TeamOptions';
 
 const BLANK = {
   tipo: '', name: '', model: '', year: '', plate: '', vin: '',
@@ -31,6 +32,8 @@ export default function AssetFormModal({ open, onClose, onSubmit, asset, teams, 
         ...Object.fromEntries(Object.entries(asset).map(([k, v]) => [k, v ?? ''])),
         team_id: asset.team_id || '',
         status: asset.status || 'disponivel',
+        // o campo virou sim/não: qualquer valor antigo significa que tem o GPS
+        samsung: yesNo(asset.samsung),
       });
     } else {
       setForm({ ...BLANK, team_id: defaultTeamId || '', tipo: categories[0]?.name || '' });
@@ -138,7 +141,7 @@ export default function AssetFormModal({ open, onClose, onSubmit, asset, teams, 
             <Field label="Equipe">
               <select value={form.team_id} onChange={set('team_id')} className="input-apple">
                 <option value="">Yard (sem equipe)</option>
-                {teams.map((t) => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
+                <TeamOptions teams={teams} />
               </select>
             </Field>
             <Field label="Status">
@@ -249,8 +252,12 @@ export default function AssetFormModal({ open, onClose, onSubmit, asset, teams, 
             <Field label="Bouncie">
               <input value={form.bouncie} onChange={set('bouncie')} placeholder="ID do rastreador" className="input-apple" />
             </Field>
-            <Field label="Samsung">
-              <input value={form.samsung} onChange={set('samsung')} placeholder="Tablet / dispositivo" className="input-apple" />
+            <Field label="Samsung (GPS)">
+              <select value={form.samsung} onChange={set('samsung')} className="input-apple">
+                <option value="">—</option>
+                <option value="Sim">Sim</option>
+                <option value="Não">Não</option>
+              </select>
             </Field>
             <Field label="E-ZPass">
               <input value={form.e_pass} onChange={set('e_pass')} placeholder="Transponder" className="input-apple" />

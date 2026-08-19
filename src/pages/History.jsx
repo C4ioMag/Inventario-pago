@@ -7,7 +7,7 @@ import Modal from '../components/Modal';
 import { MOVEMENT_KINDS, movementKind } from '../lib/movements';
 import { exportMovementsPDF } from '../lib/pdf';
 import { fmtDateTime } from '../lib/format';
-import { teamLabel } from '../lib/teams';
+import TeamOptions from '../components/TeamOptions';
 
 const PAGE = 40;
 
@@ -75,7 +75,7 @@ export default function History() {
         <select value={teamFilter} onChange={(e) => { setTeamFilter(e.target.value); setVisible(PAGE); }} className="input-apple w-auto min-w-[140px]">
           <option value="all">Todas as equipes</option>
           <option value="none">Yard</option>
-          {teams.map((t) => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
+          <TeamOptions teams={teams} />
         </select>
       </div>
 

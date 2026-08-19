@@ -9,11 +9,13 @@ create table if not exists teams (
   id text primary key,
   name text not null,
   code text,                       -- código da equipe no sistema (ex.: PC-038)
+  kind text not null default 'equipe',  -- 'equipe' | 'supervisor'
   supervisor text,
   created_at timestamptz default now()
 );
 alter table teams add column if not exists supervisor text;
 alter table teams add column if not exists code text;
+alter table teams add column if not exists kind text not null default 'equipe';
 
 -- CATEGORIAS (tipos de equipamento: Truck, Trailer, Vacuum, ...)
 create table if not exists categories (
