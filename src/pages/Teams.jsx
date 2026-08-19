@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Package, Pencil, Plus, Truck, Users, Warehouse } from 'lucide-react';
+import { Package, Pencil, Plus, Truck, UserCog, Users, Warehouse } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import PageHeader from '../components/PageHeader';
 import TeamFormModal from '../components/TeamFormModal';
@@ -11,7 +11,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import TeamPanel from '../components/TeamPanel';
 import TransferModal from '../components/TransferModal';
 import { fmtUSD } from '../lib/format';
-import { teamLabel } from '../lib/teams';
+import { splitByKind, teamLabel } from '../lib/teams';
 
 const YARD = { id: null, name: 'Yard' };
 
@@ -39,6 +39,8 @@ export default function Teams() {
     setSearchParams({}, { replace: true });
   }, [searchParams, teams, setSearchParams]);
 
+  const { equipes, supervisores } = useMemo(() => splitByKind(teams), [teams]);
+
   const assetsByTeam = useMemo(() => groupBy(assets, (a) => a.team_id || '__none__'), [assets]);
   const itemsByTeam = useMemo(() => groupBy(items, (i) => i.team_id || '__none__'), [items]);
 
@@ -53,9 +55,12 @@ export default function Teams() {
     <div>
       <PageHeader
         title="Equipes"
-        subtitle={`${teams.length} equipe(s) · ${assets.length} equipamento(s) e ${items.length} item(ns) distribuídos`}
+        subtitle={`${equipes.length} equipe(s) e ${supervisores.length} supervisor(es) · ${assets.length} equipamento(s) e ${items.length} item(ns) distribuídos`}
       >
-        <button onClick={() => setTeamForm({})} className="btn-primary flex items-center gap-2 px-3.5 py-2 text-[13px]">
+        <button onClick={() => setTeamForm({ kind: 'supervisor' })} className="btn-ghost flex items-center gap-2 px-3.5 py-2 text-[13px]">
+          <UserCog size={15} /> Novo supervisor
+        </button>
+        <button onClick={() => setTeamForm({ kind: 'equipe' })} className="btn-primary flex items-center gap-2 px-3.5 py-2 text-[13px]">
           <Plus size={15} /> Nova equipe
         </button>
       </PageHeader>
@@ -65,43 +70,65 @@ export default function Teams() {
           {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-[150px]" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <TeamCard
-            label="Yard"
-            sub="Estoque e equipamentos sem equipe"
-            assetsCount={(assetsByTeam.get('__none__') || []).length}
-            itemsCount={(itemsByTeam.get('__none__') || []).length}
-            value={stockValue('__none__')}
-            icon={<Warehouse size={15} />}
-            onOpen={(tab) => setPanel({ team: YARD, tab })}
-          />
-          {teams.map((t, idx) => (
+        <div className="space-y-7">
+          <Section title="Equipes" count={equipes.length}>
             <TeamCard
-              key={t.id}
-              label={teamLabel(t)}
-              sub={t.supervisor ? `Supervisor · ${t.supervisor}` : 'Equipe'}
-              assetsCount={(assetsByTeam.get(t.id) || []).length}
-              itemsCount={(itemsByTeam.get(t.id) || []).length}
-              value={stockValue(t.id)}
-              onOpen={(tab) => setPanel({ team: t, tab })}
-              onEdit={() => setTeamForm({ team: t })}
-              delay={idx * 0.03}
+              label="Yard"
+              sub="Estoque e equipamentos sem equipe"
+              assetsCount={(assetsByTeam.get('__none__') || []).length}
+              itemsCount={(itemsByTeam.get('__none__') || []).length}
+              value={stockValue('__none__')}
+              icon={<Warehouse size={15} />}
+              onOpen={(tab) => setPanel({ team: YARD, tab })}
             />
-          ))}
-          <button
-            onClick={() => setTeamForm({})}
-            className="row-hover flex min-h-[150px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed"
-            style={{ borderColor: 'var(--border-strong)', color: 'var(--text-secondary)' }}
-          >
-            <Users size={20} strokeWidth={1.7} />
-            <span className="text-[13px] font-medium">Criar nova equipe</span>
-          </button>
+            {equipes.map((t, idx) => (
+              <TeamCard
+                key={t.id}
+                label={teamLabel(t)}
+                sub={t.supervisor ? `Supervisor · ${t.supervisor}` : 'Equipe'}
+                assetsCount={(assetsByTeam.get(t.id) || []).length}
+                itemsCount={(itemsByTeam.get(t.id) || []).length}
+                value={stockValue(t.id)}
+                onOpen={(tab) => setPanel({ team: t, tab })}
+                onEdit={() => setTeamForm({ team: t })}
+                delay={idx * 0.03}
+              />
+            ))}
+            <AddCard
+              icon={<Users size={20} strokeWidth={1.7} />}
+              label="Criar nova equipe"
+              onClick={() => setTeamForm({ kind: 'equipe' })}
+            />
+          </Section>
+
+          <Section title="Supervisores" count={supervisores.length}>
+            {supervisores.map((t, idx) => (
+              <TeamCard
+                key={t.id}
+                label={teamLabel(t)}
+                sub="Supervisor"
+                icon={<UserCog size={15} />}
+                assetsCount={(assetsByTeam.get(t.id) || []).length}
+                itemsCount={(itemsByTeam.get(t.id) || []).length}
+                value={stockValue(t.id)}
+                onOpen={(tab) => setPanel({ team: t, tab })}
+                onEdit={() => setTeamForm({ team: t })}
+                delay={idx * 0.03}
+              />
+            ))}
+            <AddCard
+              icon={<UserCog size={20} strokeWidth={1.7} />}
+              label="Cadastrar supervisor"
+              onClick={() => setTeamForm({ kind: 'supervisor' })}
+            />
+          </Section>
         </div>
       )}
 
       <TeamFormModal
         open={Boolean(teamForm)}
         team={teamForm?.team}
+        defaultKind={teamForm?.kind}
         onClose={() => setTeamForm(null)}
         onSubmit={(fields) => (teamForm?.team ? renameTeam(teamForm.team.id, fields) : addTeam(fields))}
       />
@@ -127,8 +154,8 @@ export default function Teams() {
         open={Boolean(confirmDelete)}
         onClose={() => setConfirmDelete(null)}
         title={`Excluir "${confirmDelete?.name}"?`}
-        message="Os equipamentos e itens desta equipe não serão apagados — eles voltam para o Yard."
-        confirmLabel="Excluir equipe"
+        message="Os equipamentos e itens não serão apagados — eles voltam para o Yard."
+        confirmLabel="Excluir"
         onConfirm={async () => {
           await removeTeam(confirmDelete.id);
           setPanel(null);
@@ -162,6 +189,31 @@ export default function Teams() {
         onSubmit={transfer?.kind === 'item' ? transferItem : transferAsset}
       />
     </div>
+  );
+}
+
+function Section({ title, count, children }) {
+  return (
+    <section>
+      <div className="mb-3 flex items-center gap-2">
+        <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text)' }}>{title}</h2>
+        <span className="badge" style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>{count}</span>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
+    </section>
+  );
+}
+
+function AddCard({ icon, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="row-hover flex min-h-[150px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed"
+      style={{ borderColor: 'var(--border-strong)', color: 'var(--text-secondary)' }}
+    >
+      {icon}
+      <span className="text-[13px] font-medium">{label}</span>
+    </button>
   );
 }
 

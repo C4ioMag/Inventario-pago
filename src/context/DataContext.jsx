@@ -68,10 +68,10 @@ export function DataProvider({ children }) {
   // ---------- Equipes ----------
 
   async function addTeam(fields) {
-    const payload = typeof fields === 'string' ? { name: fields } : fields;
+    const payload = typeof fields === 'string' ? { name: fields, kind: 'equipe' } : { kind: 'equipe', ...fields };
     const row = await store.teamsStore.create(payload);
     setTeams((prev) => [...prev, row]);
-    notify(`Equipe "${row.name}" criada`, 'success');
+    notify(`${row.kind === 'supervisor' ? 'Supervisor' : 'Equipe'} "${row.name}" criado`, 'success');
     return row;
   }
 
@@ -710,7 +710,7 @@ export function DataProvider({ children }) {
    * Casa pelo nome ou pelo código — "Equipe Caio", "PC-038" e "Caio · PC-038"
    * são a mesma equipe — e completa o código/supervisor de quem já existe.
    */
-  async function importTeams(rows) {
+  async function importTeams(rows, { defaultKind = 'equipe' } = {}) {
     const index = teamIndex(teams);
     const byId = new Map(teams.map((t) => [t.id, t]));
     const created = [];
@@ -726,6 +726,7 @@ export function DataProvider({ children }) {
         const row = await store.teamsStore.create({
           name,
           code: r.code || null,
+          kind: r.kind || defaultKind,
           supervisor: r.supervisor || null,
         });
         created.push(row);
@@ -739,6 +740,7 @@ export function DataProvider({ children }) {
       const patch = {};
       if (r.code && !current?.code) patch.code = r.code;
       if (r.supervisor && !current?.supervisor) patch.supervisor = r.supervisor;
+      if (r.kind && r.kind !== (current?.kind || 'equipe')) patch.kind = r.kind;
       if (Object.keys(patch).length === 0) {
         skipped += 1;
         continue;
@@ -773,7 +775,7 @@ export function DataProvider({ children }) {
         continue;
       }
       const { name, code } = splitTeamLabel(text);
-      const row = await store.teamsStore.create({ name: name || text, code: code || null });
+      const row = await store.teamsStore.create({ name: name || text, code: code || null, kind: 'equipe' });
       created.push(row);
       if (row.name) index.set(teamKey(row.name), row.id);
       if (row.code) index.set(teamKey(row.code), row.id);

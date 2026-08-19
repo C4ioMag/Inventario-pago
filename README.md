@@ -10,7 +10,7 @@ Sistema de controle de inventário, equipes e frota (Power Connect USA).
   Entradas, saídas e **transferências entre equipes/Yard** em um clique; ao retirar,
   oferece gerar invoice (máquina + VIN) em PDF para cobrança.
 - *Equipamentos*: frota completa com categoria, modelo, ano, placa, VIN, equipe, supervisor,
-  proprietário, status, observações e Verizon/Bouncie/Samsung/E-ZPass. Já no cadastro dá para
+  proprietário, status, observações, Verizon, Bouncie, E-ZPass e **Samsung (GPS): sim ou não**. Já no cadastro dá para
   lançar as manutenções que o equipamento teve. Cada tipo de manutenção pede os campos certos:
   **troca de óleo** (tipo de óleo, litros, filtros), **troca de pneus** (posições, marca,
   medida, alinhamento), **troca de peças** (part number, marca, fornecedor, garantia) e revisão.
@@ -26,7 +26,10 @@ Sistema de controle de inventário, equipes e frota (Power Connect USA).
   peça ou mecânico. Ao abrir uma manutenção o equipamento passa para o status "Manutenção";
   ao concluir (com data, complemento do serviço e custo) ele volta para "Disponível".
   Todo registro fica no histórico do equipamento e pode ser editado, reaberto ou excluído.
-- *Equipes*: cada equipe tem **nome e código do sistema** (ex.: `Caio · PC-038`) — o código
+- *Equipes e supervisores*: a página tem duas seções. **Equipes** são os grupos de trabalho e
+  **Supervisores** são pessoas que também respondem por equipamentos — funcionam igual (guardam
+  frota e estoque, recebem transferências), só aparecem separados nas listas e seletores.
+  Cada um tem **nome e código do sistema** (ex.: `Caio · PC-038`) — o código
   é opcional, aparece junto do nome em todo o app e também serve para casar as equipes ao
   importar planilhas e PDFs ("Equipe Caio", "PC-038" e "Caio · PC-038" são a mesma equipe).
   Clicar no card abre o painel com dois acessos — ver seus **equipamentos** e ver
@@ -44,10 +47,17 @@ direto para o sistema:
   perde**: as que o sistema não conhece são guardadas em Observações no formato `Coluna: valor`.
   Importar de novo **completa** os equipamentos que já existem com os campos que estavam
   vazios, sem apagar nada.
+- *Conferir / corrigir colunas*: a importação mostra cada coluna do arquivo, um exemplo do
+  conteúdo dela e para onde ela está indo — e deixa **apontar na mão** o campo certo, mandar a
+  coluna para Observações ou ignorá-la. Serve para qualquer cabeçalho fora do padrão
+  (`COD ATIVO`, `CHASSI 17`, `LICENCA`…), inclusive quando o sistema não achou nenhuma coluna.
+  Células mescladas no cabeçalho também são lidas.
 - *PDFs*: o mesmo arquivo é lido de dois jeitos, escolhidos em abas.
-  - **Documento de um veículo** (registration, título, seguro, inspeção): reconhece VIN, placa,
-    ano, modelo, proprietário, validade e odômetro — você confere na tela e escolhe em qual
-    equipamento gravar (só entram os campos ainda vazios).
+  - **Documento de um veículo** (ficha do equipamento, registration, título, seguro, inspeção):
+    reconhece unidade, VIN (inclusive escrito com espaços), placa, ano, modelo, proprietário,
+    supervisor, equipe, odômetro, **Verizon, Bouncie, Samsung (GPS) e E-ZPass**, além de
+    validade e apólice — você confere na tela e escolhe em qual equipamento gravar (só entram
+    os campos ainda vazios; a equipe citada é criada se não existir).
   - **Lista / tabela** (a frota inteira, ou as equipes, num PDF só): as colunas são deduzidas
     pelos corredores de espaço em branco da página, e daí em diante vale tudo o que a planilha
     tem — cabeçalho automático, mesmos nomes de coluna, colunas extras em Observações.

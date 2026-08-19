@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
-import { teamLabel } from '../lib/teams';
+import TeamOptions from './TeamOptions';
 
 const BLANK = { name: '', quantity: '', unit_price: '', min_quantity: '3', team_id: '' };
 
@@ -75,7 +75,7 @@ export default function AddItemModal({ open, onClose, onSubmit, item, teams, def
         <Field label="Equipe">
           <select value={form.team_id} onChange={set('team_id')} className="input-apple">
             <option value="">Yard (geral)</option>
-            {teams.map((t) => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
+            <TeamOptions teams={teams} />
           </select>
         </Field>
 

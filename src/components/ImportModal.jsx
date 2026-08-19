@@ -8,7 +8,7 @@ import {
   cellText, detectHeaderRow, fieldLabel,
 } from '../lib/importMap';
 import { PDF_FIELD_LABELS, extractVehicleFields, readPdf } from '../lib/pdfText';
-import { teamLabel } from '../lib/teams';
+import { TEAM_KINDS, teamLabel } from '../lib/teams';
 
 const MODES = [
   { value: 'assets', label: 'Equipamentos', fields: ASSET_FIELDS },
@@ -49,7 +49,7 @@ function parseDelimited(text) {
 export default function ImportModal({ open, document: doc, onClose }) {
   const {
     teams, assets, importAssets, importItems, importTeams,
-    addDocument, updateAsset, ensureAssetByName,
+    addDocument, updateAsset, ensureAssetByName, ensureTeamsByLabel,
   } = useData();
   const { notify } = useToast();
   const inputRef = useRef(null);
@@ -62,6 +62,9 @@ export default function ImportModal({ open, document: doc, onClose }) {
   const [headerAuto, setHeaderAuto] = useState(true);
   const [updateExisting, setUpdateExisting] = useState(true);
   const [createTeams, setCreateTeams] = useState(true);
+  const [teamKindDefault, setTeamKindDefault] = useState('equipe');
+  const [manual, setManual] = useState({});       // { índice da coluna: campo | '__extra__' | '__ignore__' }
+  const [showColumns, setShowColumns] = useState(false);
   const [pdfView, setPdfView] = useState('doc');   // 'doc' (um veículo) | 'table' (lista)
   const [pdf, setPdf] = useState(null);            // { text, fields, pages }
   const [pdfTarget, setPdfTarget] = useState('');
@@ -71,6 +74,8 @@ export default function ImportModal({ open, document: doc, onClose }) {
   const [result, setResult] = useState(null);
 
   function reset() {
+    setManual({});
+    setShowColumns(false);
     setFile(null);
     setSheets([]);
     setSheetIdx(0);
@@ -128,7 +133,11 @@ export default function ImportModal({ open, document: doc, onClose }) {
           for (let r = 1; r <= ws.rowCount; r++) {
             const row = ws.getRow(r);
             const values = [];
-            for (let c = 1; c <= width; c++) values.push(row.getCell(c).value);
+            for (let c = 1; c <= width; c++) {
+              const cell = row.getCell(c);
+              // célula mesclada: o valor mora na célula "mestre"
+              values.push(cell.value ?? (cell.isMerged ? cell.master?.value : null));
+            }
             if (values.some((v) => cellText(v).trim())) rows.push(values);
           }
           return { name: ws.name, rows };
@@ -176,13 +185,42 @@ export default function ImportModal({ open, document: doc, onClose }) {
   );
   const headerIndex = headerAuto ? detected : Math.min(headerRow, (sheet?.rows.length || 1) - 1);
 
+  const mapping = useMemo(() => {
+    const overrides = {};
+    const ignore = [];
+    for (const [index, target] of Object.entries(manual)) {
+      if (target === '__ignore__') ignore.push(Number(index));
+      else if (target && target !== '__extra__') overrides[target] = Number(index);
+    }
+    return { overrides, ignore };
+  }, [manual]);
+
   const preview = useMemo(() => {
     if (!sheet) return null;
     const headers = (sheet.rows[headerIndex] || []).map((c) => cellText(c).trim());
     const data = sheet.rows.slice(headerIndex + 1);
     const build = mode === 'assets' ? buildAssetRows : mode === 'teams' ? buildTeamRows : buildItemRows;
-    return { ...build({ headers, data, teams }), headers };
-  }, [sheet, headerIndex, mode, teams]);
+    const sample = (col) => {
+      for (const row of data) {
+        const v = cellText(row[col]).trim();
+        if (v) return v;
+      }
+      return '';
+    };
+    return { ...build({ headers, data, teams, mapping }), headers, sample };
+  }, [sheet, headerIndex, mode, teams, mapping]);
+
+  /** Qual campo cada coluna do arquivo está alimentando agora. */
+  const columnTargets = useMemo(() => {
+    if (!preview) return [];
+    const byIndex = new Map(Object.entries(preview.cols).map(([field, i]) => [i, field]));
+    return preview.headers.map((header, i) => ({
+      index: i,
+      header,
+      target: manual[i] || byIndex.get(i) || '__extra__',
+      sample: preview.sample(i),
+    })).filter((c) => c.header || c.sample);
+  }, [preview, manual]);
 
   async function handleImport() {
     setImporting(true);
@@ -196,7 +234,7 @@ export default function ImportModal({ open, document: doc, onClose }) {
           skipped ? `${skipped} sem mudança` : null,
         ].filter(Boolean).join(' · '));
       } else if (mode === 'teams') {
-        const { created, updated, skipped } = await importTeams(preview.list);
+        const { created, updated, skipped } = await importTeams(preview.list, { defaultKind: teamKindDefault });
         setResult([
           `${created.length} equipe(s) criada(s)`,
           updated.length ? `${updated.length} completada(s)` : null,
@@ -219,16 +257,21 @@ export default function ImportModal({ open, document: doc, onClose }) {
     setImporting(true);
     try {
       const patch = {};
-      if (f.vin) patch.vin = f.vin;
-      if (f.plate) patch.plate = f.plate;
-      if (f.year) patch.year = f.year;
-      if (f.model) patch.model = f.model;
-      if (f.owner) patch.owner = f.owner;
+      for (const key of ['vin', 'plate', 'year', 'model', 'owner', 'supervisor', 'verizon', 'bouncie', 'samsung', 'e_pass']) {
+        if (f[key]) patch[key] = f[key];
+      }
       if (f.odometer != null) patch.odometer = f.odometer;
+
+      // a equipe citada no documento entra junto (criada se ainda não existir)
+      if (f.team) {
+        const { resolved } = await ensureTeamsByLabel([f.team]);
+        const teamId = resolved.get(f.team.trim());
+        if (teamId) patch.team_id = teamId;
+      }
 
       let target = assets.find((a) => a.id === pdfTarget);
       if (!target) {
-        const name = f.plate || f.vin || file.name.replace(PDF_RE, '');
+        const name = f.name || f.plate || f.vin || file.name.replace(PDF_RE, '');
         target = await ensureAssetByName(name);
       }
       // não sobrescreve o que já está preenchido no cadastro
@@ -422,29 +465,99 @@ export default function ImportModal({ open, document: doc, onClose }) {
               </div>
             </div>
 
+              <div className="rounded-lg px-3.5 py-3" style={{ background: 'var(--bg-secondary)' }}>
+                <p className="text-[12.5px]" style={{ color: 'var(--text)' }}>
+                  {preview.error ? 'Nenhuma linha lida ainda' : <><strong>{preview.list.length}</strong> linha(s)</>}
+                  {' · colunas lidas: '}
+                  {Object.keys(preview.cols).map((k) => fieldLabel(fields, k)).join(', ') || 'nenhuma'}
+                </p>
+                {preview.extras.length > 0 && (
+                  <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                    Colunas extras guardadas em Observações: {preview.extras.join(', ')}
+                  </p>
+                )}
+                <button
+                  onClick={() => setShowColumns((v) => !v)}
+                  className="mt-2 text-[12.5px] font-semibold"
+                  style={{ color: 'var(--accent)' }}
+                >
+                  {showColumns ? 'Ocultar conferência de colunas' : `Conferir / corrigir colunas (${columnTargets.length})`}
+                </button>
+              </div>
+
+              {/* Cada coluna do arquivo e para onde ela está indo — corrigir aqui
+                  resolve qualquer cabeçalho que o sistema não reconheceu sozinho. */}
+              {showColumns && (
+                <div className="card row-divide max-h-[280px] overflow-auto">
+                  {columnTargets.map((col) => (
+                    <div key={col.index} className="flex items-center gap-3 px-3.5 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-medium" style={{ color: 'var(--text)' }}>
+                          {col.header || `Coluna ${col.index + 1}`}
+                        </p>
+                        <p className="truncate text-[11.5px]" style={{ color: 'var(--text-tertiary)' }}>
+                          {col.sample ? `Ex: ${col.sample}` : 'sem exemplo'}
+                        </p>
+                      </div>
+                      <select
+                        value={col.target}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setManual((prev) => {
+                            const next = { ...prev };
+                            // um campo só pode vir de uma coluna
+                            if (value !== '__extra__' && value !== '__ignore__') {
+                              for (const [k, v] of Object.entries(next)) if (v === value) delete next[k];
+                              for (const other of columnTargets) {
+                                if (other.index !== col.index && other.target === value) next[other.index] = '__extra__';
+                              }
+                            }
+                            next[col.index] = value;
+                            return next;
+                          });
+                          setResult(null);
+                        }}
+                        className="input-apple w-[190px] shrink-0 text-[12.5px]"
+                      >
+                        {fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                        <option value="__extra__">— Guardar em Observações —</option>
+                        <option value="__ignore__">— Ignorar esta coluna —</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {preview.groups?.length > 0 && (
+                <p className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                  Equipes reconhecidas como título de grupo: {preview.groups.join(' · ')} — os
+                  equipamentos listados abaixo de cada título entram nela.
+                </p>
+              )}
+
             {preview.error ? (
               <p className="rounded-lg px-3.5 py-3 text-[13px]" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
-                {preview.error}
+                {preview.error} Você também pode apontar a coluna certa em “Conferir / corrigir colunas”.
               </p>
             ) : (
               <>
-                <div className="rounded-lg px-3.5 py-3" style={{ background: 'var(--bg-secondary)' }}>
-                  <p className="text-[12.5px]" style={{ color: 'var(--text)' }}>
-                    <strong>{preview.list.length}</strong> linha(s) · colunas lidas:{' '}
-                    {Object.keys(preview.cols).map((k) => fieldLabel(fields, k)).join(', ')}
-                  </p>
-                  {preview.extras.length > 0 && (
-                    <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                      Colunas extras guardadas em Observações: {preview.extras.join(', ')}
+                {mode === 'teams' && (
+                  <div>
+                    <label className="mb-1.5 block text-[12.5px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      Criar como
+                    </label>
+                    <select
+                      value={teamKindDefault}
+                      onChange={(e) => { setTeamKindDefault(e.target.value); setResult(null); }}
+                      className="input-apple"
+                    >
+                      <option value="equipe">Equipes</option>
+                      <option value="supervisor">Supervisores</option>
+                    </select>
+                    <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
+                      Vale para as linhas sem uma coluna dizendo o tipo.
                     </p>
-                  )}
-                </div>
-
-                {preview.groups?.length > 0 && (
-                  <p className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                    Equipes reconhecidas como título de grupo: {preview.groups.join(' · ')} — os
-                    equipamentos listados abaixo de cada título entram nela.
-                  </p>
+                  </div>
                 )}
 
                 {mode === 'assets' && (
@@ -475,7 +588,7 @@ export default function ImportModal({ open, document: doc, onClose }) {
                     <thead>
                       <tr>
                         {mode === 'assets' && <><th>Nome</th><th>Categoria</th><th>Modelo</th><th>Placa</th><th>VIN</th><th>Equipe</th></>}
-                        {mode === 'teams' && <><th>Equipe</th><th>Código</th><th>Supervisor</th></>}
+                        {mode === 'teams' && <><th>Nome</th><th>Código</th><th>Supervisor</th><th>Tipo</th></>}
                         {mode === 'items' && <><th>Item</th><th className="!text-right">Qtd</th><th className="!text-right">Preço</th><th>Equipe</th></>}
                       </tr>
                     </thead>
@@ -504,6 +617,7 @@ export default function ImportModal({ open, document: doc, onClose }) {
                             <>
                               <td className="whitespace-nowrap">{r.code || '—'}</td>
                               <td>{r.supervisor || '—'}</td>
+                              <td>{TEAM_KINDS[r.kind || teamKindDefault].label}</td>
                             </>
                           )}
                           {mode === 'items' && (

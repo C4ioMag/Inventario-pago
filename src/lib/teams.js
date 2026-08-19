@@ -77,3 +77,29 @@ export function splitTeamLabel(raw) {
   const after = tidy(clean.slice(m.index + m[0].length));
   return { name: before || after || code, code };
 }
+
+/**
+ * Uma equipe pode ser um grupo de trabalho ou um supervisor.
+ * Supervisores também têm equipamento no nome deles, então são guardados do
+ * mesmo jeito — o que muda é como aparecem na tela.
+ */
+export const TEAM_KINDS = {
+  equipe: { value: 'equipe', label: 'Equipe', plural: 'Equipes', hint: 'Grupo de trabalho' },
+  supervisor: { value: 'supervisor', label: 'Supervisor', plural: 'Supervisores', hint: 'Pessoa que responde por equipamentos' },
+};
+
+export function teamKind(team) {
+  return TEAM_KINDS[team?.kind] || TEAM_KINDS.equipe;
+}
+
+export function isSupervisorTeam(team) {
+  return team?.kind === 'supervisor';
+}
+
+/** Separa a lista em equipes e supervisores, preservando a ordem. */
+export function splitByKind(teams) {
+  return {
+    equipes: teams.filter((t) => !isSupervisorTeam(t)),
+    supervisores: teams.filter(isSupervisorTeam),
+  };
+}
