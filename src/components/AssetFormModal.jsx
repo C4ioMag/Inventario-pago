@@ -8,7 +8,7 @@ import TeamOptions from './TeamOptions';
 
 const BLANK = {
   tipo: '', name: '', model: '', year: '', plate: '', vin: '',
-  team_id: '', supervisor: '', owner: '', notes: '', status: 'disponivel',
+  team_id: '', supervisor: '', driver: '', owner: '', city: '', state: '', notes: '', status: 'disponivel',
   odometer: '', oil_interval: '', last_oil_odometer: '', last_oil_date: '',
   verizon: '', bouncie: '', samsung: '', e_pass: '',
 };
@@ -154,8 +154,17 @@ export default function AssetFormModal({ open, onClose, onSubmit, asset, teams, 
             <Field label="Supervisor">
               <input value={form.supervisor} onChange={set('supervisor')} placeholder="Ex: Felipe Donato" className="input-apple" />
             </Field>
+            <Field label="Motorista / operador">
+              <input value={form.driver} onChange={set('driver')} placeholder="Ex: João Pereira" className="input-apple" />
+            </Field>
             <Field label="Proprietário">
               <input value={form.owner} onChange={set('owner')} placeholder="Ex: Power Connect USA" className="input-apple" />
+            </Field>
+            <Field label="Cidade">
+              <input value={form.city} onChange={set('city')} placeholder="Ex: Apopka" className="input-apple" />
+            </Field>
+            <Field label="Estado">
+              <input value={form.state} onChange={set('state')} placeholder="Ex: FL" className="input-apple" />
             </Field>
           </div>
         </Section>

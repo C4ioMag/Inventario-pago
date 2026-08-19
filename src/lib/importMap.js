@@ -104,6 +104,20 @@ export function toYesNo(raw) {
   return 'Sim';
 }
 
+const BLANKISH = ['na', 'n/a', 'nd', 'none', 'null', 'nulo', 'vazio', '-', '--', '---', '#n/a', 'x'];
+
+/** "N/A", "-", "none" numa planilha querem dizer vazio, não conteúdo. */
+export function blankish(value) {
+  const v = String(value ?? '').trim();
+  return BLANKISH.includes(v.toLowerCase()) ? '' : v;
+}
+
+/** Nomes que a planilha usa para dizer "nenhuma equipe". */
+export function isPlaceholderName(value) {
+  const key = normKey(value);
+  return !key || ['semequipe', 'semequipes', 'semsupervisor', 'nenhuma', 'nenhum', 'geral', 'na', 'total', 'totalgeral'].includes(key);
+}
+
 export function toStatus(raw) {
   const key = normKey(raw);
   if (!key) return null;
@@ -141,7 +155,10 @@ export const ASSET_FIELDS = [
   { key: 'plate', label: 'Placa', aliases: ['placa', 'plate', 'licenseplate', 'license', 'tag', 'tagnumber', 'tagno', 'plateno', 'platenumber'] },
   { key: 'vin', label: 'VIN', aliases: ['vin', 'chassi', 'chassis', 'serial', 'numerodeserie', 'numeroserie'], loose: true },
   { key: 'team', label: 'Equipe', aliases: ['equipe', 'team', 'crew', 'turma', 'setor', 'squad', 'grupo', 'location', 'local', 'base', 'yard'] },
-  { key: 'supervisor', label: 'Supervisor', aliases: ['supervisor', 'responsavel', 'driver', 'motorista', 'operador', 'operator', 'foreman', 'lider', 'leader'] },
+  { key: 'supervisor', label: 'Supervisor', aliases: ['supervisor', 'responsavel', 'foreman', 'lider', 'leader', 'encarregado'] },
+  { key: 'driver', label: 'Motorista / operador', aliases: ['driver', 'motorista', 'operador', 'operator', 'condutor'] },
+  { key: 'city', label: 'Cidade', aliases: ['cidade', 'city', 'municipio'] },
+  { key: 'state', label: 'Estado', aliases: ['estado', 'state', 'uf'] },
   { key: 'owner', label: 'Proprietário', aliases: ['proprietario', 'owner', 'empresa', 'company', 'titular', 'ownership', 'leasing', 'lease'] },
   { key: 'status', label: 'Status', aliases: ['status', 'situacao', 'condicao', 'condition', 'state', 'disponibilidade'] },
   { key: 'odometer', label: 'Odômetro', aliases: ['odometro', 'odometer', 'milhagem', 'mileage', 'miles', 'km', 'quilometragem', 'hodometro', 'horimetro', 'hourmeter', 'hours', 'horas', 'enginehours'], loose: true },
@@ -166,7 +183,12 @@ export const ITEM_FIELDS = [
 
 /**
  * Casa os cabeçalhos com os campos conhecidos.
- * Primeiro exige igualdade exata; depois aceita "contém" nos campos `loose`.
+ *
+ * A força do encontro importa: um cabeçalho que é o **próprio nome** do campo
+ * ganha de um que é só sinônimo. Sem isso, numa planilha com "Driver" e
+ * "Supervisor" o campo Supervisor ficava com a coluna Driver (sinônimo dele)
+ * e a coluna Supervisor sobrava.
+ *
  * Devolve `{ cols, matched, extras }` — `extras` são os índices não reconhecidos.
  */
 export function matchColumns(headers, fields, { overrides = {}, ignore = [] } = {}) {
@@ -183,26 +205,28 @@ export function matchColumns(headers, fields, { overrides = {}, ignore = [] } = 
   }
   for (const index of ignored) taken.add(index);
 
-  for (const field of fields) {
-    if (cols[field.key] != null) continue;
-    const idx = keys.findIndex((k, i) => k && !taken.has(i) && field.aliases.includes(k));
-    if (idx !== -1) {
-      cols[field.key] = idx;
-      taken.add(idx);
-    }
-  }
-  // Campos `loose` escolhem primeiro: "NUMERO DE SERIE" é VIN, não o nome,
-  // mesmo que "numero" também seja apelido de nome.
-  const claim = (field, test) => {
+  const candidates = [];
+  fields.forEach((field, fieldOrder) => {
     if (cols[field.key] != null) return;
-    const idx = keys.findIndex((k, i) => k && !taken.has(i) && field.aliases.some((a) => a.length >= 3 && test(k, a)));
-    if (idx !== -1) {
-      cols[field.key] = idx;
-      taken.add(idx);
-    }
-  };
-  for (const field of fields.filter((f) => f.loose)) claim(field, (k, a) => k.includes(a));
-  for (const field of fields) claim(field, (k, a) => k.startsWith(a));
+    const primary = new Set([normKey(field.key), normKey(field.label), normKey(field.aliases[0])]);
+    keys.forEach((key, col) => {
+      if (!key || taken.has(col)) return;
+      const score = primary.has(key) ? 0
+        : field.aliases.includes(key) ? 1
+        : field.loose && field.aliases.some((a) => a.length >= 3 && key.includes(a)) ? 2
+        : field.aliases.some((a) => a.length >= 3 && key.startsWith(a)) ? 3
+        : null;
+      if (score != null) candidates.push({ field: field.key, col, score, fieldOrder });
+    });
+  });
+
+  // Melhores encontros primeiro; empate resolve pela ordem dos campos e das colunas
+  candidates.sort((a, b) => a.score - b.score || a.fieldOrder - b.fieldOrder || a.col - b.col);
+  for (const c of candidates) {
+    if (cols[c.field] != null || taken.has(c.col)) continue;
+    cols[c.field] = c.col;
+    taken.add(c.col);
+  }
 
   // Sobrou: vira observação — menos o que o usuário mandou ignorar
   const extras = headers.map((_, i) => i).filter((i) => !taken.has(i) && !ignored.has(i) && keys[i]);
@@ -232,7 +256,7 @@ export function detectHeaderRow(rows, fields, limit = 20) {
 function extrasText(headers, row, extras) {
   return extras
     .map((i) => {
-      const value = cellText(row[i]).trim();
+      const value = blankish(cellText(row[i]));
       const label = String(headers[i] ?? '').trim();
       return value && label ? `${label}: ${value}` : null;
     })
@@ -272,7 +296,7 @@ export function buildAssetRows({ headers, data, teams = [], mapping }) {
   let currentGroup = null;
 
   for (const row of data) {
-    const get = (f) => (cols[f] == null ? '' : cellText(row[cols[f]]).trim());
+    const get = (f) => (cols[f] == null ? '' : blankish(cellText(row[cols[f]])));
 
     if (cols.team == null) {
       const header = groupHeaderTeam(row);
@@ -298,6 +322,9 @@ export function buildAssetRows({ headers, data, teams = [], mapping }) {
       plate: get('plate') || null,
       vin: get('vin').toUpperCase() || null,
       supervisor: get('supervisor') || null,
+      driver: get('driver') || null,
+      city: get('city') || null,
+      state: get('state') || null,
       owner: get('owner') || null,
       status: toStatus(get('status')) || 'disponivel',
       odometer: toNumber(get('odometer')),
@@ -332,9 +359,9 @@ export function buildTeamRows({ headers, data, mapping }) {
   const seen = new Set();
   const list = [];
   for (const row of data) {
-    const get = (f) => (cols[f] == null ? '' : cellText(row[cols[f]]).trim());
+    const get = (f) => (cols[f] == null ? '' : blankish(cellText(row[cols[f]])));
     const raw = get('name');
-    if (!raw) continue;
+    if (!raw || isPlaceholderName(raw)) continue;   // "(sem equipe)", "Total", ...
     // Sem coluna de código, "Equipe Caio, PC-038" numa coluna só já vira nome + código
     const split = splitTeamLabel(raw);
     const hasCodeColumn = cols.code != null && get('code');
@@ -364,7 +391,7 @@ export function buildItemRows({ headers, data, teams = [], mapping }) {
 
   const list = [];
   for (const row of data) {
-    const get = (f) => (cols[f] == null ? '' : cellText(row[cols[f]]).trim());
+    const get = (f) => (cols[f] == null ? '' : blankish(cellText(row[cols[f]])));
     const name = get('name');
     if (!name) continue;
     list.push({

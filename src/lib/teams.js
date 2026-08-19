@@ -79,6 +79,14 @@ export function splitTeamLabel(raw) {
 }
 
 /**
+ * "Yard Apopka FL", "Pátio SC" — o equipamento está no pátio, não com uma
+ * pessoa. Vale como "sem equipe" em vez de virar um supervisor inventado.
+ */
+export function looksLikeYard(value) {
+  return /^\s*(yard|patio|pátio|deposito|depósito|warehouse|shop|base)\b/i.test(String(value ?? ''));
+}
+
+/**
  * Uma equipe pode ser um grupo de trabalho ou um supervisor.
  * Supervisores também têm equipamento no nome deles, então são guardados do
  * mesmo jeito — o que muda é como aparecem na tela.

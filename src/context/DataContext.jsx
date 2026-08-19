@@ -3,7 +3,7 @@ import * as store from '../lib/store';
 import { supabaseReady } from '../lib/supabase';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
-import { matchTeamId, splitTeamLabel, teamIndex, teamKey } from '../lib/teams';
+import { looksLikeYard, matchTeamId, splitTeamLabel, teamIndex, teamKey } from '../lib/teams';
 
 const DataContext = createContext(null);
 
@@ -630,7 +630,7 @@ export function DataProvider({ children }) {
    * Categorias da planilha (ex.: "COMPRESSOR") são casadas com as já cadastradas
    * ("Compressor") sem diferenciar maiúsculas; as novas viram categoria de verdade.
    */
-  async function importAssets(rows, { updateExisting = true, createTeams = false } = {}) {
+  async function importAssets(rows, { updateExisting = true, createTeams = false, linkSupervisors = false } = {}) {
     let teamCreated = [];
     let resolvedTeams = new Map();
     if (createTeams) {
@@ -638,6 +638,18 @@ export function DataProvider({ children }) {
       const out = await ensureTeamsByLabel(labels);
       resolvedTeams = out.resolved;
       teamCreated = out.created;
+    }
+
+    // Planilhas onde a coluna Equipe está vazia e quem organiza é o supervisor:
+    // ele vira um responsável de verdade e recebe o equipamento.
+    let resolvedSupervisors = new Map();
+    if (linkSupervisors) {
+      const labels = rows
+        .filter((r) => !r.team_id && !resolvedTeams.get(r.team_label) && r.supervisor && !looksLikeYard(r.supervisor))
+        .map((r) => r.supervisor);
+      const out = await ensureTeamsByLabel(labels, { kind: 'supervisor' });
+      resolvedSupervisors = out.resolved;
+      teamCreated = [...teamCreated, ...out.created];
     }
 
     const byName = new Map(assets.map((a) => [(a.name || '').trim().toLowerCase(), a]));
@@ -652,6 +664,7 @@ export function DataProvider({ children }) {
       const name = (r.name || '').trim();
       if (!name) continue;
       if (!r.team_id && teamLabelText) r.team_id = resolvedTeams.get(teamLabelText) || null;
+      if (!r.team_id && r.supervisor) r.team_id = resolvedSupervisors.get(r.supervisor.trim()) || null;
 
       let tipo = (r.tipo || '').trim() || null;
       if (tipo) {
@@ -710,7 +723,7 @@ export function DataProvider({ children }) {
    * Casa pelo nome ou pelo código — "Equipe Caio", "PC-038" e "Caio · PC-038"
    * são a mesma equipe — e completa o código/supervisor de quem já existe.
    */
-  async function importTeams(rows, { defaultKind = 'equipe' } = {}) {
+  async function importTeams(rows, { defaultKind = 'equipe', createSupervisors = false } = {}) {
     const index = teamIndex(teams);
     const byId = new Map(teams.map((t) => [t.id, t]));
     const created = [];
@@ -754,14 +767,23 @@ export function DataProvider({ children }) {
       const patched = new Map(updated.map((t) => [t.id, t]));
       setTeams((prev) => [...prev.map((t) => patched.get(t.id) || t), ...created]);
     }
-    return { created, updated, skipped };
+
+    // A coluna "Supervisor" da lista de equipes também vira cadastro
+    let supervisorsCreated = [];
+    if (createSupervisors) {
+      const names = rows.map((r) => r.supervisor).filter((n) => n && !looksLikeYard(n));
+      const out = await ensureTeamsByLabel(names, { kind: 'supervisor' });
+      supervisorsCreated = out.created;
+    }
+
+    return { created, updated, skipped, supervisorsCreated };
   }
 
   /**
    * Garante que existam as equipes citadas numa importação de equipamentos
    * (coluna "Equipe" ou cabeçalhos de grupo do PDF) e devolve rótulo → id.
    */
-  async function ensureTeamsByLabel(labels) {
+  async function ensureTeamsByLabel(labels, { kind = 'equipe' } = {}) {
     const index = teamIndex(teams);
     const created = [];
     const resolved = new Map();
@@ -775,7 +797,7 @@ export function DataProvider({ children }) {
         continue;
       }
       const { name, code } = splitTeamLabel(text);
-      const row = await store.teamsStore.create({ name: name || text, code: code || null, kind: 'equipe' });
+      const row = await store.teamsStore.create({ name: name || text, code: code || null, kind });
       created.push(row);
       if (row.name) index.set(teamKey(row.name), row.id);
       if (row.code) index.set(teamKey(row.code), row.id);
