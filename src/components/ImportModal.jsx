@@ -8,7 +8,7 @@ import {
   cellText, detectHeaderRow, fieldLabel,
 } from '../lib/importMap';
 import { PDF_FIELD_LABELS, extractVehicleFields, readPdf } from '../lib/pdfText';
-import { TEAM_KINDS, teamLabel } from '../lib/teams';
+import { TEAM_KINDS, looksLikeYard, teamLabel } from '../lib/teams';
 
 const MODES = [
   { value: 'assets', label: 'Equipamentos', fields: ASSET_FIELDS },
@@ -62,6 +62,8 @@ export default function ImportModal({ open, document: doc, onClose }) {
   const [headerAuto, setHeaderAuto] = useState(true);
   const [updateExisting, setUpdateExisting] = useState(true);
   const [createTeams, setCreateTeams] = useState(true);
+  const [linkSupervisors, setLinkSupervisors] = useState(true);
+  const [createSupervisors, setCreateSupervisors] = useState(true);
   const [teamKindDefault, setTeamKindDefault] = useState('equipe');
   const [manual, setManual] = useState({});       // { índice da coluna: campo | '__extra__' | '__ignore__' }
   const [showColumns, setShowColumns] = useState(false);
@@ -226,7 +228,7 @@ export default function ImportModal({ open, document: doc, onClose }) {
     setImporting(true);
     try {
       if (mode === 'assets') {
-        const { created, updated, skipped, teamsCreated } = await importAssets(preview.list, { updateExisting, createTeams });
+        const { created, updated, skipped, teamsCreated } = await importAssets(preview.list, { updateExisting, createTeams, linkSupervisors });
         setResult([
           `${created.length} equipamento(s) criado(s)`,
           updated.length ? `${updated.length} atualizado(s) com dados novos` : null,
@@ -234,10 +236,14 @@ export default function ImportModal({ open, document: doc, onClose }) {
           skipped ? `${skipped} sem mudança` : null,
         ].filter(Boolean).join(' · '));
       } else if (mode === 'teams') {
-        const { created, updated, skipped } = await importTeams(preview.list, { defaultKind: teamKindDefault });
+        const { created, updated, skipped, supervisorsCreated } = await importTeams(preview.list, {
+          defaultKind: teamKindDefault,
+          createSupervisors,
+        });
         setResult([
-          `${created.length} equipe(s) criada(s)`,
-          updated.length ? `${updated.length} completada(s)` : null,
+          `${created.length} ${teamKindDefault === 'supervisor' ? 'supervisor(es)' : 'equipe(s)'} criado(s)`,
+          supervisorsCreated?.length ? `${supervisorsCreated.length} supervisor(es) da coluna Supervisor` : null,
+          updated.length ? `${updated.length} completado(s)` : null,
           skipped ? `${skipped} sem mudança` : null,
         ].filter(Boolean).join(' · '));
       } else {
@@ -289,6 +295,22 @@ export default function ImportModal({ open, document: doc, onClose }) {
     } finally {
       setImporting(false);
     }
+  }
+
+  /** O que a prévia mostra na coluna Equipe, já contando as opções marcadas. */
+  function teamCellFor(row) {
+    if (row.team_id) return teamLabel(teams.find((t) => t.id === row.team_id));
+    if (row.team_label) {
+      return (
+        <span style={{ color: createTeams ? 'var(--accent)' : 'var(--warn)' }}>
+          {row.team_label}{createTeams ? ' (nova)' : ' (não encontrada)'}
+        </span>
+      );
+    }
+    if (linkSupervisors && row.supervisor && !looksLikeYard(row.supervisor)) {
+      return <span style={{ color: 'var(--accent)' }}>{row.supervisor} (supervisor)</span>;
+    }
+    return 'Yard';
   }
 
   const pdfFilled = pdf ? Object.entries(PDF_FIELD_LABELS).filter(([k]) => pdf.fields[k] != null && pdf.fields[k] !== '') : [];
@@ -557,6 +579,15 @@ export default function ImportModal({ open, document: doc, onClose }) {
                     <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
                       Vale para as linhas sem uma coluna dizendo o tipo.
                     </p>
+                    <label className="mt-2 flex items-center gap-2.5 text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>
+                      <input
+                        type="checkbox"
+                        checked={createSupervisors}
+                        onChange={(e) => setCreateSupervisors(e.target.checked)}
+                        className="h-4 w-4"
+                      />
+                      Cadastrar também os nomes da coluna “Supervisor”
+                    </label>
                   </div>
                 )}
 
@@ -580,6 +611,16 @@ export default function ImportModal({ open, document: doc, onClose }) {
                       />
                       Criar as equipes que ainda não existirem (nome e código, ex.: Caio · PC-038)
                     </label>
+                    <label className="flex items-center gap-2.5 text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>
+                      <input
+                        type="checkbox"
+                        checked={linkSupervisors}
+                        onChange={(e) => setLinkSupervisors(e.target.checked)}
+                        className="h-4 w-4"
+                      />
+                      Sem equipe na linha, cadastrar o supervisor e deixar o equipamento com ele
+                      (nomes de pátio, como “Yard Apopka FL”, continuam no Yard)
+                    </label>
                   </div>
                 )}
 
@@ -602,15 +643,7 @@ export default function ImportModal({ open, document: doc, onClose }) {
                               <td>{r.model || '—'}</td>
                               <td>{r.plate || '—'}</td>
                               <td className="whitespace-nowrap">{r.vin || '—'}</td>
-                              <td>
-                                {r.team_id
-                                  ? teamLabel(teams.find((t) => t.id === r.team_id))
-                                  : r.team_label
-                                    ? <span style={{ color: createTeams ? 'var(--accent)' : 'var(--warn)' }}>
-                                        {r.team_label}{createTeams ? ' (nova)' : ' (não encontrada)'}
-                                      </span>
-                                    : 'Yard'}
-                              </td>
+                              <td>{teamCellFor(r)}</td>
                             </>
                           )}
                           {mode === 'teams' && (

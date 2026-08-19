@@ -67,7 +67,10 @@ create table if not exists assets (
   plate text,
   vin text,
   supervisor text,
+  driver text,                     -- motorista / operador do equipamento
   owner text,
+  city text,
+  state text,
   notes text,
   status text not null default 'disponivel',  -- 'disponivel' | 'em_uso' | 'manutencao'
   -- Manutenção / troca de óleo
@@ -87,6 +90,9 @@ alter table assets add column if not exists odometer numeric;
 alter table assets add column if not exists oil_interval numeric;
 alter table assets add column if not exists last_oil_odometer numeric;
 alter table assets add column if not exists last_oil_date text;
+alter table assets add column if not exists driver text;
+alter table assets add column if not exists city text;
+alter table assets add column if not exists state text;
 
 -- HISTÓRICO DE MANUTENÇÃO POR EQUIPAMENTO (peças, óleo, pneus, revisão)
 create table if not exists asset_parts_history (

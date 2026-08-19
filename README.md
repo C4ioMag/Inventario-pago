@@ -42,11 +42,21 @@ direto para o sistema:
 - *Planilhas (.xlsx/.csv)*: o cabeçalho é encontrado sozinho mesmo quando a planilha tem
   título ou linhas em branco no topo (e dá para escolher a linha e a aba na mão). São
   reconhecidas colunas em português e inglês — código/unit, tipo, modelo/make, ano, placa,
-  **VIN/chassi/serial**, equipe, supervisor, proprietário, status, odômetro/hourmeter,
+  **VIN/chassi/serial**, equipe, supervisor, motorista/driver, cidade, estado, proprietário,
+  status, odômetro/hourmeter,
   intervalo e última troca de óleo, Verizon, Bouncie, Samsung e E-ZPass. **Nenhuma coluna se
   perde**: as que o sistema não conhece são guardadas em Observações no formato `Coluna: valor`.
   Importar de novo **completa** os equipamentos que já existem com os campos que estavam
   vazios, sem apagar nada.
+- *Prioridade no reconhecimento*: um cabeçalho que é o **próprio nome** do campo ganha de um
+  sinônimo. Numa planilha com `Driver` e `Supervisor`, cada um vai para o seu campo — antes o
+  Supervisor ficava com a coluna Driver (sinônimo dele) e a coluna Supervisor sobrava.
+  `N/A`, `-` e `none` são lidos como vazio, e linhas de resumo (`(sem equipe)`, `Total`) não
+  viram equipe.
+- *Supervisores a partir da planilha de frota*: quando a linha não tem equipe, o supervisor dela
+  é cadastrado como **supervisor** e o equipamento fica com ele. Nomes de pátio
+  (`Yard Apopka FL`) são reconhecidos como pátio e continuam no Yard. Na importação de equipes,
+  os nomes da coluna Supervisor também podem virar cadastro.
 - *Conferir / corrigir colunas*: a importação mostra cada coluna do arquivo, um exemplo do
   conteúdo dela e para onde ela está indo — e deixa **apontar na mão** o campo certo, mandar a
   coluna para Observações ou ignorá-la. Serve para qualquer cabeçalho fora do padrão
