@@ -11,6 +11,7 @@ import Items from './pages/Items';
 import Equipment from './pages/Equipment';
 import AssetDetail from './pages/AssetDetail';
 import Maintenance from './pages/Maintenance';
+import Reviews from './pages/Reviews';
 import Teams from './pages/Teams';
 import Categories from './pages/Categories';
 import Documents from './pages/Documents';
@@ -39,6 +40,7 @@ function AppRoutes() {
         <Route path="/equipamentos" element={<Equipment />} />
         <Route path="/equipamentos/asset/:assetId" element={<AssetDetail />} />
         <Route path="/manutencao" element={<Maintenance />} />
+        <Route path="/revisao" element={<Reviews />} />
         <Route path="/equipes" element={<Teams />} />
         <Route path="/categorias" element={<Categories />} />
         <Route path="/documentos" element={<Documents />} />

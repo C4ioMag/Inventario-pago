@@ -12,7 +12,7 @@ import TeamOptions from '../components/TeamOptions';
 
 export default function Equipment() {
   const navigate = useNavigate();
-  const { assets, teams, categories, loading, addAsset, updateAsset, transferAsset } = useData();
+  const { assets, teams, categories, loading, addAsset, updateAsset, transferAsset, requestReview } = useData();
 
   const [search, setSearch] = useState('');
   const [teamFilter, setTeamFilter] = useState('all');
@@ -149,6 +149,7 @@ export default function Equipment() {
         teamNameOf={(id) => (id ? teamName(id) : null)}
         onClose={() => setTransfer(null)}
         onSubmit={transferAsset}
+        onReview={requestReview}
       />
     </div>
   );

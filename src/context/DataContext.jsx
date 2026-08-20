@@ -4,6 +4,7 @@ import { supabaseReady } from '../lib/supabase';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
 import { looksLikeYard, matchTeamId, splitTeamLabel, teamIndex, teamKey } from '../lib/teams';
+import { fmtUSD } from '../lib/format';
 
 const DataContext = createContext(null);
 
@@ -16,6 +17,8 @@ export function DataProvider({ children }) {
   const [movements, setMovements] = useState([]);
   const [categories, setCategories] = useState([]);
   const [documents, setDocuments] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const { notify } = useToast();
   const { user } = useAuth();
@@ -24,17 +27,21 @@ export function DataProvider({ children }) {
   const refreshAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [itemsData, invoicesData, teamsData, assetsData, historyData, movementsData, categoriesData, documentsData] =
-        await Promise.all([
-          store.listItems(),
-          store.listInvoices(),
-          store.teamsStore.list(),
-          store.assetsStore.list(),
-          store.assetHistoryStore.list(),
-          store.movementsStore.list(),
-          store.categoriesStore.list(),
-          store.documentsStore.list(),
-        ]);
+      const [
+        itemsData, invoicesData, teamsData, assetsData, historyData,
+        movementsData, categoriesData, documentsData, catalogData, reviewsData,
+      ] = await Promise.all([
+        store.listItems(),
+        store.listInvoices(),
+        store.teamsStore.list(),
+        store.assetsStore.list(),
+        store.assetHistoryStore.list(),
+        store.movementsStore.list(),
+        store.categoriesStore.list(),
+        store.documentsStore.list(),
+        store.catalogStore.list(),
+        store.reviewsStore.list(),
+      ]);
       setItems(itemsData);
       setInvoices(invoicesData);
       setTeams(teamsData);
@@ -43,6 +50,8 @@ export function DataProvider({ children }) {
       setMovements(movementsData);
       setCategories(categoriesData);
       setDocuments(documentsData);
+      setCatalog(catalogData);
+      setReviews(reviewsData);
     } catch (err) {
       notify(err.message || 'Erro ao carregar dados', 'error');
     } finally {
@@ -597,6 +606,208 @@ export function DataProvider({ children }) {
     return row;
   }
 
+  // ---------- Catálogo de itens ----------
+
+  /**
+   * O catálogo guarda o item em si (ex.: "Cone de sinalização"), separado do
+   * estoque. Itens comprados na rua ficam com `track_stock` desligado: não têm
+   * saldo, só o registro de quanto foi entregue a cada equipe.
+   */
+  async function addCatalogItem(fields) {
+    const row = await store.catalogStore.create({
+      name: fields.name.trim(),
+      unit: fields.unit?.trim() || null,
+      default_price: fields.defaultPrice === '' || fields.defaultPrice == null ? null : Number(fields.defaultPrice),
+      track_stock: fields.trackStock !== false,
+      notes: fields.notes?.trim() || null,
+    });
+    setCatalog((prev) => [...prev, row]);
+    notify(`"${row.name}" salvo no catálogo`, 'success');
+    return row;
+  }
+
+  async function updateCatalogItem(id, patch) {
+    const updated = await store.catalogStore.update(id, patch);
+    setCatalog((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    notify('Item do catálogo atualizado', 'success');
+    return updated;
+  }
+
+  async function removeCatalogItem(id) {
+    await store.catalogStore.remove(id);
+    setCatalog((prev) => prev.filter((c) => c.id !== id));
+    notify('Item removido do catálogo', 'success');
+  }
+
+  /** Guarda o nome no catálogo se ainda não estiver lá (usado ao criar item). */
+  async function ensureCatalogItem(name, extra = {}) {
+    const clean = String(name || '').trim();
+    if (!clean) return null;
+    const found = catalog.find((c) => c.name.trim().toLowerCase() === clean.toLowerCase());
+    if (found) return found;
+    const row = await store.catalogStore.create({
+      name: clean,
+      unit: extra.unit || null,
+      default_price: extra.defaultPrice ?? null,
+      track_stock: extra.trackStock !== false,
+      notes: null,
+    });
+    setCatalog((prev) => [...prev, row]);
+    return row;
+  }
+
+  /**
+   * Entrega direta: material comprado na rua que vai direto para a equipe.
+   * Não mexe em saldo — fica registrado quanto cada equipe recebeu.
+   */
+  async function deliverCatalogItem({ catalogId, name, teamId, quantity, unitPrice, date, notes }) {
+    const product = catalog.find((c) => c.id === catalogId);
+    const itemName = product?.name || String(name || '').trim();
+    if (!itemName) return;
+    const qty = Number(quantity) || 0;
+    const cost = unitPrice === '' || unitPrice == null ? null : Number(unitPrice);
+
+    const row = await logMovement({
+      kind: 'entrega',
+      entity_type: 'item',
+      entity_id: catalogId || null,
+      entity_name: itemName,
+      quantity: qty,
+      description: `${qty}${product?.unit ? ` ${product.unit}` : ''} de ${itemName} entregue(s) a ${teamNameOf(teamId) || 'Yard'}`
+        + (cost != null ? ` · ${fmtUSD(cost * qty)}` : ''),
+      to_value: teamNameOf(teamId) || 'Yard',
+      team_id: teamId || null,
+      team_name: teamNameOf(teamId),
+      notes: notes?.trim() || null,
+      created_at: date ? new Date(`${date}T12:00:00`).toISOString() : undefined,
+    });
+    notify(`Entrega registrada para ${teamNameOf(teamId) || 'Yard'}`, 'success');
+    return row;
+  }
+
+  // ---------- Revisão de transferência ----------
+
+  /**
+   * Manda o equipamento/item "para revisão": a transferência só acontece
+   * quando alguém confirma que o destino recebeu de verdade.
+   */
+  async function requestReview({ entityType = 'asset', entityId, quantity = null, toTeamId, notes }) {
+    const source = entityType === 'item'
+      ? items.find((i) => i.id === entityId)
+      : assets.find((a) => a.id === entityId);
+    if (!source) return;
+    if ((source.team_id || null) === (toTeamId || null)) {
+      notify('Origem e destino são a mesma equipe', 'info');
+      return;
+    }
+
+    const row = await store.reviewsStore.create({
+      entity_type: entityType,
+      entity_id: entityId,
+      entity_name: source.name,
+      quantity: entityType === 'item' ? Number(quantity) || 1 : null,
+      from_team_id: source.team_id || null,
+      from_team_name: teamNameOf(source.team_id) || 'Yard',
+      to_team_id: toTeamId || null,
+      to_team_name: teamNameOf(toTeamId) || 'Yard',
+      status: 'pendente',
+      notes: notes?.trim() || null,
+      requested_by: userName,
+    });
+    setReviews((prev) => [row, ...prev]);
+
+    await logMovement({
+      kind: 'revisao',
+      entity_type: entityType,
+      entity_id: entityId,
+      entity_name: source.name,
+      quantity: row.quantity,
+      description: `Enviado para revisão: ${row.from_team_name} → ${row.to_team_name}`,
+      from_value: row.from_team_name,
+      to_value: row.to_team_name,
+      notes: row.notes,
+      team_id: source.team_id || null,
+      team_name: teamNameOf(source.team_id),
+    });
+
+    notify('Enviado para revisão — confirme quando o destino receber', 'success');
+    return row;
+  }
+
+  /** O destino recebeu: a transferência acontece agora. */
+  async function confirmReview(id, reviewNotes) {
+    const review = reviews.find((r) => r.id === id);
+    if (!review || review.status !== 'pendente') return;
+
+    if (review.entity_type === 'item') {
+      await transferItem({
+        itemId: review.entity_id,
+        quantity: review.quantity || 1,
+        toTeamId: review.to_team_id,
+        notes: review.notes,
+      });
+    } else {
+      await transferAsset({ assetId: review.entity_id, toTeamId: review.to_team_id, notes: review.notes });
+    }
+
+    const updated = await store.reviewsStore.update(id, {
+      status: 'confirmado',
+      review_notes: reviewNotes?.trim() || null,
+      reviewed_by: userName,
+      reviewed_at: new Date().toISOString(),
+    });
+    setReviews((prev) => prev.map((r) => (r.id === id ? updated : r)));
+    notify(`Recebimento confirmado em ${review.to_team_name}`, 'success');
+    return updated;
+  }
+
+  /** O destino não recebeu: nada é movido e fica o registro do que houve. */
+  async function rejectReview(id, reviewNotes) {
+    const review = reviews.find((r) => r.id === id);
+    if (!review || review.status !== 'pendente') return;
+    const updated = await store.reviewsStore.update(id, {
+      status: 'nao_recebido',
+      review_notes: reviewNotes?.trim() || null,
+      reviewed_by: userName,
+      reviewed_at: new Date().toISOString(),
+    });
+    setReviews((prev) => prev.map((r) => (r.id === id ? updated : r)));
+
+    await logMovement({
+      kind: 'revisao',
+      entity_type: review.entity_type,
+      entity_id: review.entity_id,
+      entity_name: review.entity_name,
+      description: `Não recebido em ${review.to_team_name} — segue em ${review.from_team_name}`,
+      from_value: review.from_team_name,
+      to_value: review.to_team_name,
+      notes: updated.review_notes,
+      team_id: review.from_team_id,
+      team_name: review.from_team_name,
+    });
+
+    notify('Marcado como não recebido', 'info');
+    return updated;
+  }
+
+  /** Volta uma revisão fechada para pendente (fechou por engano). */
+  async function reopenReview(id) {
+    const updated = await store.reviewsStore.update(id, {
+      status: 'pendente',
+      reviewed_at: null,
+      reviewed_by: null,
+    });
+    setReviews((prev) => prev.map((r) => (r.id === id ? updated : r)));
+    notify('Revisão reaberta', 'success');
+    return updated;
+  }
+
+  async function removeReview(id) {
+    await store.reviewsStore.remove(id);
+    setReviews((prev) => prev.filter((r) => r.id !== id));
+    notify('Revisão excluída', 'success');
+  }
+
   // ---------- Documentos ----------
 
   async function addDocument({
@@ -851,6 +1062,8 @@ export function DataProvider({ children }) {
         movements,
         categories,
         documents,
+        catalog,
+        reviews,
         loading,
         dbConnected: supabaseReady,
         addItem,
@@ -877,6 +1090,16 @@ export function DataProvider({ children }) {
         finishWorkOrder,
         reopenWorkOrder,
         ensureAssetByName,
+        addCatalogItem,
+        updateCatalogItem,
+        removeCatalogItem,
+        ensureCatalogItem,
+        deliverCatalogItem,
+        requestReview,
+        confirmReview,
+        rejectReview,
+        reopenReview,
+        removeReview,
         addDocument,
         removeDocument,
         updateMovementNotes,
