@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom';
+import { useData } from '../context/DataContext';
 import {
   ClipboardList, Cog, FileBarChart, FolderOpen, History,
-  LayoutGrid, Package, Tags, Truck, Users, Wrench,
+  ClipboardCheck, LayoutGrid, Package, Tags, Truck, Users, Wrench,
 } from 'lucide-react';
 
 const GROUPS = [
@@ -14,6 +15,7 @@ const GROUPS = [
       { to: '/itens', label: 'Itens', icon: Package },
       { to: '/equipamentos', label: 'Equipamentos', icon: Truck },
       { to: '/manutencao', label: 'Manutenção', icon: Wrench },
+      { to: '/revisao', label: 'Revisão', icon: ClipboardCheck, badge: 'reviews' },
       { to: '/equipes', label: 'Equipes', icon: Users },
     ],
   },
@@ -29,6 +31,10 @@ const GROUPS = [
 ];
 
 export default function Sidebar({ collapsed, onNavigate }) {
+  const { reviews = [] } = useData() || {};
+  // pendências de revisão aparecem no menu para não passarem batido
+  const badges = { reviews: reviews.filter((r) => r.status === 'pendente').length };
+
   return (
     <aside
       className="flex h-full flex-col border-r"
@@ -60,7 +66,13 @@ export default function Sidebar({ collapsed, onNavigate }) {
             )}
             <div className="space-y-0.5">
               {group.items.map((item) => (
-                <NavItem key={item.to} {...item} collapsed={collapsed} onNavigate={onNavigate} />
+                <NavItem
+                  key={item.to}
+                  {...item}
+                  count={item.badge ? badges[item.badge] : 0}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                />
               ))}
             </div>
           </div>
@@ -74,14 +86,14 @@ export default function Sidebar({ collapsed, onNavigate }) {
   );
 }
 
-function NavItem({ to, label, icon: Icon, end, collapsed, onNavigate }) {
+function NavItem({ to, label, icon: Icon, end, collapsed, onNavigate, count = 0 }) {
   return (
     <NavLink
       to={to}
       end={end}
       onClick={onNavigate}
       title={collapsed ? label : undefined}
-      className={`flex items-center rounded-lg text-[13.5px] font-medium transition-colors ${
+      className={`relative flex items-center rounded-lg text-[13.5px] font-medium transition-colors ${
         collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
       }`}
       style={({ isActive }) => ({
@@ -93,6 +105,14 @@ function NavItem({ to, label, icon: Icon, end, collapsed, onNavigate }) {
         <>
           <Icon size={17} strokeWidth={isActive ? 2.2 : 1.9} className="shrink-0" />
           {!collapsed && <span className="truncate">{label}</span>}
+          {count > 0 && (
+            <span
+              className={`ml-auto rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${collapsed ? 'absolute right-1 top-1' : ''}`}
+              style={{ background: 'var(--warn-soft)', color: 'var(--warn)' }}
+            >
+              {count}
+            </span>
+          )}
         </>
       )}
     </NavLink>

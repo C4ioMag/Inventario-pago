@@ -20,7 +20,7 @@ export default function AssetDetail() {
   const {
     teams, assets, items, assetHistory, movements, categories, documents, loading,
     updateAsset, removeAsset, addAssetHistoryEntry, transferAsset, addDocument, removeDocument,
-    finishWorkOrder,
+    finishWorkOrder, requestReview,
   } = useData();
 
   const [editOpen, setEditOpen] = useState(false);
@@ -357,6 +357,7 @@ export default function AssetDetail() {
         teamNameOf={teamName}
         onClose={() => setTransferOpen(false)}
         onSubmit={transferAsset}
+        onReview={requestReview}
       />
 
       <ConfirmDialog

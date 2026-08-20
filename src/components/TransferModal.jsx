@@ -7,10 +7,11 @@ import TeamOptions from './TeamOptions';
  * Transferência entre equipes/yard.
  * Item: move uma quantidade. Equipamento: move o registro inteiro.
  */
-export default function TransferModal({ open, onClose, onSubmit, entity, kind, teams, teamNameOf }) {
+export default function TransferModal({ open, onClose, onSubmit, onReview, entity, kind, teams, teamNameOf }) {
   const [toTeamId, setToTeamId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
+  const [needsReview, setNeedsReview] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const isItem = kind === 'item';
@@ -21,6 +22,7 @@ export default function TransferModal({ open, onClose, onSubmit, entity, kind, t
     if (!open) return;
     setQuantity(isItem ? Math.min(1, max) || 1 : 1);
     setNotes('');
+    setNeedsReview(false);
     const firstOther = ['', ...teams.map((t) => t.id)].find((id) => id !== currentTeamId);
     setToTeamId(firstOther ?? '');
   }, [open, isItem, max, teams, currentTeamId]);
@@ -31,9 +33,20 @@ export default function TransferModal({ open, onClose, onSubmit, entity, kind, t
     e.preventDefault();
     setSaving(true);
     try {
-      await onSubmit(isItem
-        ? { itemId: entity.id, quantity: Number(quantity), toTeamId: toTeamId || null, notes }
-        : { assetId: entity.id, toTeamId: toTeamId || null, notes });
+      if (needsReview && onReview) {
+        // não move agora: fica pendente até o destino confirmar que recebeu
+        await onReview({
+          entityType: isItem ? 'item' : 'asset',
+          entityId: entity.id,
+          quantity: isItem ? Number(quantity) : null,
+          toTeamId: toTeamId || null,
+          notes,
+        });
+      } else {
+        await onSubmit(isItem
+          ? { itemId: entity.id, quantity: Number(quantity), toTeamId: toTeamId || null, notes }
+          : { assetId: entity.id, toTeamId: toTeamId || null, notes });
+      }
       onClose();
     } finally {
       setSaving(false);
@@ -97,12 +110,34 @@ export default function TransferModal({ open, onClose, onSubmit, entity, kind, t
           />
         </div>
 
+        {onReview && (
+          <label
+            className="flex items-start gap-2.5 rounded-lg border p-3.5"
+            style={{ borderColor: needsReview ? 'var(--accent)' : 'var(--border)' }}
+          >
+            <input
+              type="checkbox"
+              checked={needsReview}
+              onChange={(e) => setNeedsReview(e.target.checked)}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              <span className="block text-[13px] font-medium" style={{ color: 'var(--text)' }}>
+                Conferir se o destino recebeu
+              </span>
+              <span className="block text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                Vai para a tela de Revisão e só é transferido quando alguém confirmar o recebimento.
+              </span>
+            </span>
+          </label>
+        )}
+
         <button
           type="submit"
           disabled={saving || (isItem && (Number(quantity) < 1 || Number(quantity) > max))}
           className="btn-primary w-full py-2.5 text-[14px]"
         >
-          {saving ? 'Transferindo…' : 'Confirmar transferência'}
+          {saving ? 'Salvando…' : needsReview ? 'Enviar para revisão' : 'Confirmar transferência'}
         </button>
       </form>
     </Modal>

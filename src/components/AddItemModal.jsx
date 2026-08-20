@@ -4,7 +4,7 @@ import TeamOptions from './TeamOptions';
 
 const BLANK = { name: '', quantity: '', unit_price: '', min_quantity: '3', team_id: '' };
 
-export default function AddItemModal({ open, onClose, onSubmit, item, teams, defaultTeamId }) {
+export default function AddItemModal({ open, onClose, onSubmit, item, teams, defaultTeamId, catalog = [], preset }) {
   const [form, setForm] = useState(BLANK);
   const [saving, setSaving] = useState(false);
   const isEdit = Boolean(item);
@@ -20,11 +20,29 @@ export default function AddItemModal({ open, onClose, onSubmit, item, teams, def
         team_id: item.team_id || '',
       });
     } else {
-      setForm({ ...BLANK, team_id: defaultTeamId || '' });
+      setForm({
+        ...BLANK,
+        name: preset?.name || '',
+        unit_price: preset?.unitPrice != null ? String(preset.unitPrice) : '',
+        team_id: defaultTeamId || '',
+      });
     }
-  }, [open, item, defaultTeamId]);
+  }, [open, item, defaultTeamId, preset]);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const known = catalog.find((c) => c.name.trim().toLowerCase() === form.name.trim().toLowerCase());
+
+  /** Escolher um item do catálogo já traz o preço padrão dele. */
+  function handleName(e) {
+    const value = e.target.value;
+    const match = catalog.find((c) => c.name.trim().toLowerCase() === value.trim().toLowerCase());
+    setForm((f) => ({
+      ...f,
+      name: value,
+      unit_price: match?.default_price != null && !f.unit_price ? String(match.default_price) : f.unit_price,
+    }));
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -53,7 +71,31 @@ export default function AddItemModal({ open, onClose, onSubmit, item, teams, def
     >
       <form onSubmit={handleSubmit} className="space-y-3.5">
         <Field label="Nome do item">
-          <input required autoFocus value={form.name} onChange={set('name')} placeholder="Ex: Cone de Sinalização" className="input-apple" />
+          <input
+            required
+            autoFocus
+            list="catalog-items"
+            value={form.name}
+            onChange={handleName}
+            placeholder="Ex: Cone de Sinalização"
+            className="input-apple"
+            autoComplete="off"
+          />
+          {/* itens já salvos aparecem como sugestão — escolher um traz o preço junto */}
+          <datalist id="catalog-items">
+            {catalog.map((c) => (
+              <option key={c.id} value={c.name}>
+                {[c.unit, c.track_stock === false ? 'compra na rua' : null].filter(Boolean).join(' · ')}
+              </option>
+            ))}
+          </datalist>
+          {!isEdit && catalog.length > 0 && (
+            <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
+              {known
+                ? `"${known.name}" já está no catálogo.`
+                : 'Itens novos entram no catálogo automaticamente.'}
+            </p>
+          )}
         </Field>
 
         <div className="grid grid-cols-3 gap-3">

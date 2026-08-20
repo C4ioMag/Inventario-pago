@@ -126,10 +126,44 @@ alter table asset_parts_history add column if not exists mechanic text;
 alter table asset_parts_history add column if not exists finished_date text;
 create index if not exists asset_parts_history_status_idx on asset_parts_history (status);
 
+-- CATÁLOGO DE ITENS — o item fica salvo mesmo sem estoque
+-- (ex.: cones comprados na rua: entram como entrega direta para a equipe)
+create table if not exists item_catalog (
+  id text primary key,
+  name text not null,
+  unit text,                        -- un, cx, m, kg...
+  default_price numeric,
+  track_stock boolean not null default true,  -- false = não controla saldo, só entregas
+  notes text,
+  created_at timestamptz default now()
+);
+create index if not exists item_catalog_name_idx on item_catalog (name);
+
+-- REVISÃO DE TRANSFERÊNCIA — só vira transferência quando o destino confirma
+create table if not exists transfer_reviews (
+  id text primary key,
+  entity_type text not null default 'asset',  -- 'asset' | 'item'
+  entity_id text,
+  entity_name text not null,
+  quantity numeric,
+  from_team_id text,
+  from_team_name text,
+  to_team_id text,
+  to_team_name text,
+  status text not null default 'pendente',    -- 'pendente' | 'confirmado' | 'nao_recebido'
+  notes text,
+  review_notes text,
+  requested_by text,
+  reviewed_by text,
+  reviewed_at timestamptz,
+  created_at timestamptz default now()
+);
+create index if not exists transfer_reviews_status_idx on transfer_reviews (status);
+
 -- MOVIMENTAÇÕES — trilha de tudo que entra, sai ou muda de equipe
 create table if not exists movements (
   id text primary key,
-  kind text not null,             -- 'entrada'|'saida'|'transferencia'|'manutencao'|'cadastro'|'edicao'|'exclusao'|'troca_peca'
+  kind text not null,             -- 'entrada'|'saida'|'transferencia'|'manutencao'|'cadastro'|'edicao'|'exclusao'|'troca_peca'|'entrega'|'revisao'
   entity_type text not null,      -- 'item' | 'asset'
   entity_id text,
   entity_name text not null,

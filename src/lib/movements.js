@@ -4,6 +4,8 @@ export const MOVEMENT_KINDS = {
   transferencia: { label: 'Transferência', color: 'var(--info)' },
   manutencao: { label: 'Manutenção', color: 'var(--warn)' },
   troca_peca: { label: 'Troca de peça', color: 'var(--violet)' },
+  entrega: { label: 'Entrega direta', color: 'var(--info)' },
+  revisao: { label: 'Revisão de transferência', color: 'var(--warn)' },
   cadastro: { label: 'Cadastro', color: 'var(--info)' },
   edicao: { label: 'Edição', color: 'var(--text-secondary)' },
   exclusao: { label: 'Exclusão', color: 'var(--danger)' },

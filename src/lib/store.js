@@ -10,6 +10,8 @@ const LOCAL_ASSET_HISTORY_KEY = 'estoque_asset_history';
 const LOCAL_MOVEMENTS_KEY = 'estoque_movements';
 const LOCAL_CATEGORIES_KEY = 'estoque_categories';
 const LOCAL_DOCUMENTS_KEY = 'estoque_documents';
+const LOCAL_CATALOG_KEY = 'estoque_catalog';
+const LOCAL_REVIEWS_KEY = 'estoque_reviews';
 
 function readLocal(key) {
   try {
@@ -88,6 +90,8 @@ export const assetHistoryStore = makeCrud('asset_parts_history', LOCAL_ASSET_HIS
 export const movementsStore = makeCrud('movements', LOCAL_MOVEMENTS_KEY, { orderAsc: false });
 export const categoriesStore = makeCrud('categories', LOCAL_CATEGORIES_KEY);
 export const documentsStore = makeCrud('documents', LOCAL_DOCUMENTS_KEY, { orderAsc: false });
+export const catalogStore = makeCrud('item_catalog', LOCAL_CATALOG_KEY);
+export const reviewsStore = makeCrud('transfer_reviews', LOCAL_REVIEWS_KEY, { orderAsc: false });
 
 export async function listItems() {
   if (supabaseReady) {

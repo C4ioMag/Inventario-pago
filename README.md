@@ -6,9 +6,16 @@ Sistema de controle de inventário, equipes e frota (Power Connect USA).
 (com sparklines de dados reais), inventário resumido e movimentações recentes.
 
 **Inventário**
-- *Itens*: nome, quantidade, equipe e — só quando o item é cobrado — preço unitário.
-  Entradas, saídas e **transferências entre equipes/Yard** em um clique; ao retirar,
-  oferece gerar invoice (máquina + VIN) em PDF para cobrança.
+- *Itens*: três abas.
+  - **Estoque**: nome, quantidade, equipe e — só quando o item é cobrado — preço unitário.
+    Entradas, saídas e **transferências entre equipes/Yard** em um clique; ao retirar,
+    oferece gerar invoice (máquina + VIN) em PDF para cobrança.
+  - **Catálogo**: o item fica **salvo** (ex.: cones). Da próxima vez é só escolher pelo nome —
+    o preço padrão vem junto — e dizer a quantidade. Todo item novo criado no estoque entra no
+    catálogo sozinho. Um item pode ser marcado como **compra na rua**: não tem saldo, só o
+    registro de quanto foi para cada equipe.
+  - **Entregas**: o histórico dessas entregas diretas — item, quantidade, equipe, data e quem
+    registrou.
 - *Equipamentos*: frota completa com categoria, modelo, ano, placa, VIN, equipe, supervisor,
   proprietário, status, observações, Verizon, Bouncie, E-ZPass e **Samsung (GPS): sim ou não**. Já no cadastro dá para
   lançar as manutenções que o equipamento teve. Cada tipo de manutenção pede os campos certos:
@@ -26,6 +33,12 @@ Sistema de controle de inventário, equipes e frota (Power Connect USA).
   peça ou mecânico. Ao abrir uma manutenção o equipamento passa para o status "Manutenção";
   ao concluir (com data, complemento do serviço e custo) ele volta para "Disponível".
   Todo registro fica no histórico do equipamento e pode ser editado, reaberto ou excluído.
+- *Revisão*: quando um equipamento sai de uma equipe para outra e você quer conferir se
+  chegou mesmo. Manda para revisão (ex.: `Caio → Leandro`), e ele **fica pendente**: o registro
+  continua com quem enviou até alguém marcar **Recebeu** — só então a transferência acontece.
+  Se marcar **Não recebeu**, nada é movido e fica registrado o que houve. As transferências
+  normais também têm a opção "conferir se o destino recebeu", e o menu mostra quantas
+  pendências existem.
 - *Equipes e supervisores*: a página tem duas seções. **Equipes** são os grupos de trabalho e
   **Supervisores** são pessoas que também respondem por equipamentos — funcionam igual (guardam
   frota e estoque, recebem transferências), só aparecem separados nas listas e seletores.
